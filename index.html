@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ROMAnalyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.js" crossorigin="anonymous"></script>
+<style>
+/* VARIABLES */
+:root {
+  --bg:#07080f; --bg1:#0c0f1a; --bg2:#111525; --bg3:#161c30;
+  --line:#1c2640; --line2:#243050;
+  --cyan:#00e5cc; --cyan2:#00b8a4; --cyan-d:rgba(0,229,204,.10);
+  --blue:#4db8ff; --blue-d:rgba(77,184,255,.10);
+  --red:#ff4466;  --red-d:rgba(255,68,102,.12);
+  --green:#39d353;
+  --orange:#ff8c42; --orange-d:rgba(255,140,66,.10);
+  --purple:#b985ff; --purple-d:rgba(185,133,255,.10);
+  --txt:#b8cfe8; --txt2:#6a88aa; --txt3:#384e68;
+  --mono:'JetBrains Mono',monospace;
+  --head:'Syne',sans-serif;
+  --nav-h:62px; --hd-h:50px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; overflow:hidden; background:var(--bg); color:var(--txt); font-family:var(--head); font-size:13px; }
+button,input,textarea { font-family:var(--head); outline:none; border:none; }
+button { cursor:pointer; }
+
+/* ── SCREENS ── */
+.screen { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden; }
+.screen.off { display:none !important; }
+
+/* ── SHARED HEADER ── */
+.hd {
+  flex-shrink:0; height:var(--hd-h);
+  background:var(--bg1); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; padding:0 14px; gap:10px; z-index:10;
+}
+.logo-mark {
+  width:30px; height:30px; flex-shrink:0; border-radius:8px;
+  background:linear-gradient(135deg,var(--cyan),var(--blue));
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 0 14px rgba(0,229,204,.3);
+}
+.logo-mark svg { width:15px; height:15px; }
+.logo-name { font-size:14px; font-weight:700; letter-spacing:-.4px; color:#fff; }
+.logo-tag  { font-size:8px; color:var(--txt3); font-family:var(--mono); letter-spacing:1.5px; text-transform:uppercase; }
+.hd-right  { margin-left:auto; }
+.chip {
+  display:flex; align-items:center; gap:5px;
+  font-family:var(--mono); font-size:9px; padding:4px 9px;
+  border-radius:99px; border:1px solid var(--line2); color:var(--txt2); background:var(--bg2);
+}
+.dot { width:6px; height:6px; border-radius:50%; background:var(--txt3); flex-shrink:0; transition:all .3s; }
+.dot.on   { background:var(--green);  box-shadow:0 0 6px var(--green); }
+.dot.warn { background:var(--orange); box-shadow:0 0 6px var(--orange); }
+
+/* ── BOTTOM NAV ── */
+.bot-nav {
+  position:fixed; bottom:0; left:0; right:0;
+  height:calc(var(--nav-h) + var(--safe-b));
+  background:var(--bg1); border-top:1px solid var(--line);
+  display:flex; z-index:100; padding-bottom:var(--safe-b);
+}
+.bot-nav.off { display:none !important; }
+.nb {
+  flex:1; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:3px;
+  background:none; color:var(--txt3);
+  font-family:var(--mono); font-size:9px; letter-spacing:.8px; text-transform:uppercase;
+  padding:8px; transition:color .15s;
+}
+.nb svg { width:20px; height:20px; transition:all .15s; }
+.nb.on  { color:var(--cyan); }
+.nb.on svg { filter:drop-shadow(0 0 4px var(--cyan)); }
+
+/* ══════════════════════════════════════════
+   SCREEN: CÁMARA
+══════════════════════════════════════════ */
+#sc-cam { background:#000; }
+
+.cam-wrap {
+  flex:1; position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom:var(--nav-h);
+}
+
+/* Video CSS espejo → se aplica dinámicamente por JS según la cámara activa */
+#vid { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+#cvs { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+
+/* FABs */
+.fab-col { position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:8px; z-index:20; }
+.fab {
+  width:48px; height:48px; border-radius:13px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; border:1px solid; transition:transform .1s;
+  box-shadow:0 4px 14px rgba(0,0,0,.5);
+}
+.fab:active { transform:scale(.92); }
+.fab-s { background:rgba(0,229,204,.15); border-color:rgba(0,229,204,.4); }
+.fab-r { background:rgba(255,68,102,.12); border-color:rgba(255,68,102,.3); }
+.fab-c { background:rgba(77,184,255,.15); border-color:rgba(77,184,255,.4); }
+
+/* Angle panel */
+.ap {
+  position:absolute; bottom:0; left:0; right:0;
+  background:linear-gradient(to top,rgba(7,8,15,.97) 65%,transparent);
+  padding:30px 8px 10px;
+}
+.ap-row { display:flex; gap:5px; margin-bottom:5px; }
+.apc {
+  flex:1; background:rgba(12,15,26,.85); border:1px solid var(--line2);
+  border-radius:7px; padding:6px 7px;
+}
+.apc-lbl { font-family:var(--mono); font-size:7px; letter-spacing:.8px; text-transform:uppercase; color:var(--txt3); }
+.apc-val { font-family:var(--mono); font-size:19px; font-weight:500; line-height:1.1; color:#fff; }
+.apc-val span { font-size:8px; color:var(--txt3); }
+.apc-ex  { font-family:var(--mono); font-size:7px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.apc-max { font-family:var(--mono); font-size:7px; color:var(--txt3); }
+
+/* Flash */
+.flash { position:absolute; inset:0; background:rgba(0,229,204,.18); opacity:0; pointer-events:none; transition:opacity .3s; z-index:50; }
+.flash.show { opacity:1; }
+
+/* ══════════════════════════════════════════
+   SCREEN: SESIONES
+══════════════════════════════════════════ */
+#sc-ses { background:var(--bg); }
+.ses-body { flex:1; overflow-y:auto; padding:8px 10px 10px; margin-bottom:var(--nav-h); }
+
+.search-wrap { position:relative; margin-bottom:6px; }
+.search-wrap svg { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--txt3); pointer-events:none; }
+.search-wrap input {
+  width:100%; background:var(--bg3); border:1px solid var(--line2);
+  border-radius:8px; color:var(--txt); font-family:var(--mono); font-size:11px;
+  padding:9px 10px 9px 30px;
+}
+.search-wrap input:focus { border-color:var(--cyan); }
+
+.ses-count { font-family:var(--mono); font-size:9px; color:var(--txt3); padding:2px 2px 6px; letter-spacing:1px; text-transform:uppercase; }
+
+.import-lbl {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  padding:9px; border-radius:8px; margin-bottom:8px;
+  background:var(--bg2); border:1px dashed var(--line2);
+  color:var(--txt2); font-size:11px; font-family:var(--mono); cursor:pointer;
+}
+.import-lbl:active { border-color:var(--cyan); color:var(--cyan); }
+
+.si {
+  padding:11px 12px; border-radius:8px; margin-bottom:4px;
+  background:var(--bg1); border:1px solid transparent; cursor:pointer;
+  display:flex; flex-direction:column; gap:3px;
+}
+.si:active { background:var(--bg2); }
+.si-top   { display:flex; align-items:center; }
+.si-id    { font-family:var(--mono); font-size:9px; color:var(--txt3); }
+.si-arr   { margin-left:auto; color:var(--txt3); font-size:18px; line-height:1; }
+.si-name  { font-size:13px; font-weight:600; color:#fff; }
+.si-name.empty { color:var(--txt2); font-weight:400; font-style:italic; font-size:12px; }
+.si-date  { font-family:var(--mono); font-size:9px; color:var(--txt3); }
+
+.empty-state { display:flex; flex-direction:column; align-items:center; padding:52px 24px; gap:8px; }
+.empty-icon  { font-size:38px; opacity:.2; }
+.empty-txt   { font-family:var(--mono); font-size:10px; color:var(--txt3); text-align:center; line-height:1.7; }
+
+/* ══════════════════════════════════════════
+   SCREEN: DETALLE SESIÓN
+══════════════════════════════════════════ */
+#sc-det { background:var(--bg); }
+
+.back-hd {
+  flex-shrink:0; height:var(--hd-h);
+  background:var(--bg1); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:10px; padding:0 12px; z-index:10;
+}
+.back-btn {
+  display:flex; align-items:center; gap:5px;
+  background:none; color:var(--txt2); font-size:11px; font-family:var(--mono);
+  padding:6px 10px; border-radius:6px; border:1px solid var(--line2);
+}
+.back-btn:active { background:var(--bg3); }
+.back-title { font-size:13px; font-weight:600; color:#fff; }
+
+.det-body  { flex:1; overflow-y:auto; padding:10px 10px 80px; }
+.det-acts  {
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--bg1); border-top:1px solid var(--line);
+  padding:10px 12px; display:flex; gap:8px;
+  padding-bottom:calc(10px + var(--safe-b)); z-index:50;
+}
+
+/* Session header card */
+.shd-card {
+  background:var(--bg1); border:1px solid var(--line); border-radius:10px;
+  padding:14px; display:flex; gap:12px; align-items:flex-start; margin-bottom:10px;
+}
+.snum {
+  width:44px; height:44px; flex-shrink:0; border-radius:9px;
+  background:var(--cyan-d); border:1px solid rgba(0,229,204,.2);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.snum-l { font-family:var(--mono); font-size:7px; color:var(--cyan); letter-spacing:1px; text-transform:uppercase; }
+.snum-v { font-family:var(--mono); font-size:18px; font-weight:500; color:var(--cyan); line-height:1; }
+.sinfo  { flex:1; min-width:0; }
+.sname  { font-size:15px; font-weight:700; color:#fff; }
+.sname.empty { color:var(--txt2); font-weight:400; font-style:italic; font-size:12px; }
+.sdates { font-family:var(--mono); font-size:9px; color:var(--txt3); margin-top:3px; }
+.snotes { font-size:11px; color:var(--txt2); margin-top:4px; }
+
+/* Assign form */
+.aform {
+  background:var(--bg2); border:1px solid var(--line2); border-radius:10px;
+  padding:14px; margin-bottom:10px; display:flex; flex-direction:column; gap:10px;
+}
+.aform-title { font-family:var(--mono); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--txt2); }
+.field label { display:block; font-family:var(--mono); font-size:8px; letter-spacing:1.2px; text-transform:uppercase; color:var(--txt3); margin-bottom:5px; }
+.field input,.field textarea {
+  width:100%; background:var(--bg3); border:1px solid var(--line2);
+  border-radius:6px; color:var(--txt); font-family:var(--head); font-size:12px; padding:9px 11px;
+}
+.field textarea { resize:none; height:64px; }
+.field input:focus,.field textarea:focus { border-color:var(--cyan); }
+
+/* Tabs */
+.tabs-row { display:flex; gap:4px; margin-bottom:10px; flex-wrap:wrap; }
+.tab {
+  padding:6px 12px; border-radius:6px; font-family:var(--mono); font-size:9px;
+  border:1px solid var(--line2); color:var(--txt3); background:var(--bg2);
+  letter-spacing:.5px; cursor:pointer; transition:all .15s;
+}
+.tab.on { background:var(--cyan-d); color:var(--cyan); border-color:rgba(0,229,204,.3); }
+.tc { display:none; }
+.tc.on { display:block; }
+
+/* Joint cards */
+.jgrid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.jcard {
+  background:var(--bg1); border:1px solid var(--line); border-radius:8px; padding:11px;
+  display:flex; flex-direction:column; gap:5px;
+}
+.jcard-ttl {
+  font-size:8px; font-family:var(--mono); letter-spacing:1px; text-transform:uppercase;
+  color:var(--txt3); display:flex; align-items:center; gap:5px;
+}
+.dot2 { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+.jbody { display:flex; gap:8px; }
+.jval-lbl  { font-family:var(--mono); font-size:7px; color:var(--txt3); text-transform:uppercase; letter-spacing:1px; margin-bottom:1px; }
+.jval-num  { font-family:var(--mono); font-size:20px; font-weight:500; line-height:1; }
+.jval-unit { font-family:var(--mono); font-size:8px; color:var(--txt3); }
+.divider   { height:1px; background:var(--line); }
+.mv-row    { display:flex; align-items:center; justify-content:space-between; }
+.mv-name   { font-size:8px; color:var(--txt2); font-family:var(--mono); }
+.mv-ang    { font-family:var(--mono); font-size:11px; font-weight:600; }
+
+/* Registro table */
+.tbl-wrap { border-radius:8px; border:1px solid var(--line); overflow-x:auto; }
+table     { width:100%; border-collapse:collapse; }
+thead th  {
+  padding:7px 8px; text-align:left; font-family:var(--mono); font-size:7px;
+  letter-spacing:1.2px; text-transform:uppercase; color:var(--txt3);
+  background:var(--bg2); border-bottom:1px solid var(--line); white-space:nowrap;
+}
+tbody td  { padding:6px 8px; font-size:10px; color:var(--txt); border-bottom:1px solid rgba(28,38,64,.4); }
+tbody tr:last-child td { border-bottom:none; }
+.badge    { font-family:var(--mono); font-size:8px; padding:2px 6px; border-radius:99px; background:var(--cyan-d); color:var(--cyan); border:1px solid rgba(0,229,204,.2); }
+.rt-sup   { display:inline-flex; padding:2px 6px; border-radius:4px; font-family:var(--mono); font-size:8px; font-weight:600; background:var(--blue-d); color:var(--blue); border:1px solid rgba(77,184,255,.2); }
+.rt-inf   { display:inline-flex; padding:2px 6px; border-radius:4px; font-family:var(--mono); font-size:8px; font-weight:600; background:var(--orange-d); color:var(--orange); border:1px solid rgba(255,140,66,.2); }
+
+/* Buttons */
+.btn { padding:9px 16px; border-radius:7px; font-size:11px; font-weight:600; transition:all .15s; border:1px solid transparent; cursor:pointer; }
+.btn:active { transform:scale(.97); }
+.btn-p { background:var(--cyan); color:#000; border-color:var(--cyan); }
+.btn-g { background:transparent; color:var(--txt2); border-color:var(--line2); }
+.btn-g:active { background:var(--bg3); }
+.btn-d { background:transparent; color:var(--red); border-color:rgba(255,68,102,.3); }
+.btn-row { display:flex; gap:8px; }
+
+/* Toast */
+#toast {
+  position:fixed; bottom:calc(var(--nav-h) + 14px); left:50%;
+  transform:translateX(-50%) translateY(14px);
+  background:var(--bg1); border:1px solid var(--line2); border-radius:99px;
+  padding:8px 18px; font-family:var(--mono); font-size:10px; color:var(--txt);
+  z-index:300; opacity:0; transition:all .22s; white-space:nowrap;
+  box-shadow:0 4px 20px rgba(0,0,0,.5);
+}
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.g    { border-color:rgba(0,229,204,.3); color:var(--cyan); }
+
+/* Loading */
+#ld {
+  position:fixed; inset:0; background:var(--bg); z-index:500;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+  transition:opacity .4s;
+}
+.ld-logo { width:58px; height:58px; border-radius:17px; background:linear-gradient(135deg,var(--cyan),var(--blue)); display:flex; align-items:center; justify-content:center; box-shadow:0 0 24px rgba(0,229,204,.4); }
+.ld-logo svg { width:26px; height:26px; }
+.ld-title { font-size:20px; font-weight:700; color:#fff; }
+#ld-msg  { font-family:var(--mono); font-size:10px; color:var(--txt3); letter-spacing:.8px; text-align:center; padding:0 28px; }
+.ld-bar  { width:150px; height:3px; background:var(--line2); border-radius:99px; overflow:hidden; }
+.ld-fill { height:100%; background:linear-gradient(90deg,var(--cyan),var(--blue)); border-radius:99px; animation:ldbar 1.4s ease-in-out infinite; }
+@keyframes ldbar { 0%{transform:translateX(-100%)} 100%{transform:translateX(500%)} }
+
+/* HTTPS error */
+#https-err {
+  position:fixed; inset:0; background:var(--bg); z-index:600;
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; padding:32px;
+}
+#https-err h2 { color:var(--orange); font-size:18px; text-align:center; }
+#https-err p  { font-family:var(--mono); font-size:10px; color:var(--txt2); text-align:center; line-height:1.8; }
+
+::-webkit-scrollbar { width:3px; }
+::-webkit-scrollbar-thumb { background:var(--line2); border-radius:3px; }
+</style>
+</head>
+<body>
+
+<!-- ── LOADING ── -->
+<div id="ld">
+  <div class="ld-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round">
+      <circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="13"/>
+      <line x1="8" y1="9" x2="12" y2="11"/><line x1="16" y1="9" x2="12" y2="11"/>
+      <line x1="10" y1="13" x2="8" y2="20"/><line x1="14" y1="13" x2="16" y2="20"/>
+    </svg>
+  </div>
+  <div class="ld-title">ROMAnalyzer</div>
+  <div id="ld-msg">Cargando modelo de IA…</div>
+  <div class="ld-bar"><div class="ld-fill"></div></div>
+</div>
+
+<!-- ── HTTPS ERROR ── -->
+<div id="https-err">
+  <h2>⚠ Se requiere HTTPS</h2>
+  <p>Para acceder a la cámara desde un celular<br>el archivo debe servirse desde HTTPS.<br><br>Súbelo a GitHub Pages o usa localhost.</p>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 1 — CÁMARA
+════════════════════════════════════════ -->
+<div id="sc-cam" class="screen">
+  <div class="hd">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="13"/>
+        <line x1="8" y1="9" x2="12" y2="11"/><line x1="16" y1="9" x2="12" y2="11"/>
+        <line x1="10" y1="13" x2="8" y2="20"/><line x1="14" y1="13" x2="16" y2="20"/>
+      </svg>
+    </div>
+    <div><div class="logo-name">ROMAnalyzer</div><div class="logo-tag">VISOR DE SESIONES</div></div>
+    <div class="hd-right">
+      <div class="chip"><div class="dot" id="sDot"></div><span id="sTxt">Iniciando</span></div>
+    </div>
+  </div>
+
+  <div class="cam-wrap">
+    <video id="vid" autoplay playsinline muted></video>
+    <canvas id="cvs"></canvas>
+    <div class="flash" id="flash"></div>
+
+    <div class="fab-col">
+      <button class="fab fab-s" onclick="saveSession()" title="Guardar (S)">💾</button>
+      <button class="fab fab-r" onclick="resetSession()" title="Reset (R)">🔄</button>
+      <button class="fab fab-c" onclick="switchCam()" title="Cambiar cámara" id="fab-flip">🔁</button>
+    </div>
+
+    <div class="ap">
+      <div class="ap-row" id="ap-sup"></div>
+      <div class="ap-row" id="ap-inf"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 2 — SESIONES
+════════════════════════════════════════ -->
+<div id="sc-ses" class="screen off">
+  <div class="hd">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="13"/>
+        <line x1="8" y1="9" x2="12" y2="11"/><line x1="16" y1="9" x2="12" y2="11"/>
+        <line x1="10" y1="13" x2="8" y2="20"/><line x1="14" y1="13" x2="16" y2="20"/>
+      </svg>
+    </div>
+    <div><div class="logo-name">Sesiones</div><div class="logo-tag">Historial</div></div>
+  </div>
+  <div class="ses-body">
+    <div class="search-wrap">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="q" placeholder="Buscar paciente…" oninput="filterSes(this.value)">
+    </div>
+    <div class="ses-count" id="ses-count">0 sesiones</div>
+    <label class="import-lbl">
+      📂 Importar JSON desde PC
+      <input type="file" accept=".json" style="display:none" onchange="importJSON(this)">
+    </label>
+    <div id="ses-list"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 3 — DETALLE
+════════════════════════════════════════ -->
+<div id="sc-det" class="screen off">
+  <div class="back-hd">
+    <button class="back-btn" onclick="goBack()">← Atrás</button>
+    <div class="back-title" id="det-title">Sesión</div>
+  </div>
+  <div class="det-body" id="det-body"></div>
+  <div class="det-acts" id="det-acts"></div>
+</div>
+
+<!-- ── BOTTOM NAV ── -->
+<nav class="bot-nav" id="botnav">
+  <button class="nb on" id="nb-cam" onclick="goScreen('cam')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+    Cámara
+  </button>
+  <button class="nb" id="nb-ses" onclick="goScreen('ses')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+    Sesiones
+  </button>
+</nav>
+
+<script>
+'use strict';
+
+// ── MATH ──────────────────────────────────────────
+const DEG=r=>r*180/Math.PI;
+function vNorm(v){ return Math.sqrt(v.reduce((s,x)=>s+x*x,0)); }
+function vDot(a,b){ return a.reduce((s,x,i)=>s+x*b[i],0); }
+function vecAngle(v1,v2){
+  const n1=vNorm(v1),n2=vNorm(v2);
+  if(n1<1e-6||n2<1e-6) return 0;
+  return DEG(Math.acos(Math.max(-1,Math.min(1,vDot(v1,v2)/(n1*n2)))));
+}
+function angle3d(p1,p2,p3,z=true){
+  const ba=z?[p1.x-p2.x,p1.y-p2.y,p1.z-p2.z]:[p1.x-p2.x,p1.y-p2.y];
+  const bc=z?[p3.x-p2.x,p3.y-p2.y,p3.z-p2.z]:[p3.x-p2.x,p3.y-p2.y];
+  return vecAngle(ba,bc);
+}
+function angle2d(p1,p2,p3){
+  return vecAngle([p1.x-p2.x,p1.y-p2.y],[p3.x-p2.x,p3.y-p2.y]);
+}
+function smoothAngle(buf,val,maxLen=5,clip=15){
+  if(buf.length>0) val=Math.max(buf[buf.length-1]-clip,Math.min(buf[buf.length-1]+clip,val));
+  buf.push(val);
+  if(buf.length>maxLen) buf.shift();
+  return buf.reduce((s,v)=>s+v,0)/buf.length;
+}
+
+// ── ANÁLISIS (idéntico al Python original) ────────
+const THR=12, VIS=0.50;
+const META={
+  flexion_hombro:          {n:'Flexión',      r:'superior'},
+  extension_hombro:        {n:'Extensión',    r:'superior'},
+  abduccion_hombro:        {n:'Abducción',    r:'superior'},
+  flexion_codo:            {n:'Flexión',      r:'superior'},
+  extension_codo:          {n:'Extensión',    r:'superior'},
+  flexion_cadera:          {n:'Flexión',      r:'inferior'},
+  extension_cadera:        {n:'Extensión',    r:'inferior'},
+  abduccion_cadera:        {n:'Abducción',    r:'inferior'},
+  flexion_rodilla:         {n:'Flexión',      r:'inferior'},
+  extension_rodilla:       {n:'Extensión',    r:'inferior'},
+  dorsiflexion_tobillo:    {n:'Dorsiflexión', r:'inferior'},
+  flexion_plantar_tobillo: {n:'Flex.Plantar', r:'inferior'},
+};
+function detectPlane(sh,el){
+  let vx=el.x-sh.x,vy=el.y-sh.y,vz=(el.z||0)-(sh.z||0);
+  const n=Math.sqrt(vx*vx+vy*vy+vz*vz)+1e-6;
+  if(Math.abs(vy/n)>0.55) return 'sagital';
+  if(Math.abs(vx/n)>0.55) return 'frontal';
+  return 'mixto';
+}
+function analyzeShoulder(sh,el,hip){
+  const ang=angle3d(hip,sh,el,true);
+  const ref={x:sh.x,y:sh.y+0.3,z:sh.z};
+  const abd=angle3d(ref,sh,el,false);
+  const behind=(el.z-sh.z)>0.06;
+  const plane=detectPlane(sh,el);
+  if(plane==='sagital'||plane==='mixto'){
+    if(ang>THR&&el.y<sh.y-0.01) return ['flexion_hombro',ang];
+    if(behind&&(el.y-sh.y)>0.02){
+      const ext=Math.max(0,Math.min(60,ang*0.6));
+      if(ext>THR) return ['extension_hombro',ext];
+    }
+  }
+  if(plane==='frontal'||plane==='mixto'){
+    if(Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.45&&abd>THR) return ['abduccion_hombro',abd];
+  }
+  return [null,0];
+}
+function analyzeElbow(sh,el,wr){
+  const flex=Math.max(0,Math.min(150,180-angle3d(sh,el,wr,true)));
+  if(flex>THR) return ['flexion_codo',flex];
+  if(flex<8)   return ['extension_codo',0];
+  return [null,0];
+}
+function analyzeHip(sh,hip,kn,side){
+  const ref={x:hip.x,y:hip.y-0.2};
+  const flex=kn.y<hip.y-0.05?Math.min(angle2d(ref,hip,kn),125):0;
+  const trunk=[sh.x-hip.x,sh.y-hip.y],leg=[kn.x-hip.x,kn.y-hip.y];
+  const va=vecAngle(trunk,leg);
+  const ext=(kn.y>hip.y&&Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.2)?Math.min(180-va,60):0;
+  let abd=0;
+  if(Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.5){
+    if(side==='derecho'&&kn.x<hip.x) abd=va;
+    if(side==='izquierdo'&&kn.x>hip.x) abd=va;
+  }
+  if(flex>THR&&flex>abd&&flex>ext) return ['flexion_cadera',flex];
+  if(ext>THR&&ext>abd)             return ['extension_cadera',ext];
+  if(abd>THR)                      return ['abduccion_cadera',abd];
+  return [null,0];
+}
+function analyzeKnee(hip,kn,an){
+  const ul=[hip.x-kn.x,hip.y-kn.y],ll=[an.x-kn.x,an.y-kn.y];
+  const ang=vecAngle(ul,ll);
+  const flex=Math.max(0,Math.min(150,180-ang));
+  if(flex>10) return ['flexion_rodilla',flex];
+  return ['extension_rodilla',ang>160?0:180-ang];
+}
+function analyzeAnkle(kn,an,fi){
+  const ang=vecAngle([kn.x-an.x,kn.y-an.y],[fi.x-an.x,fi.y-an.y]);
+  if(fi.y<an.y){const d=Math.min(ang,30);return d>=25?['dorsiflexion_tobillo',d]:[null,0];}
+  const p=Math.min(180-ang,60);return p>=25?['flexion_plantar_tobillo',p]:[null,0];
+}
+
+// ── ESTADO ────────────────────────────────────────
+function localISO(d=new Date()){
+  return d.toLocaleString('sv-SE').replace('T',' ');
+}
+const SIDES=['derecho','izquierdo'];
+const JOINTS=['hombro','codo','cadera','rodilla','tobillo'];
+const J_SUP=['hombro','codo'],J_INF=['cadera','rodilla','tobillo'];
+const COLS={hombro:'var(--blue)',codo:'var(--cyan)',cadera:'var(--orange)',rodilla:'var(--green)',tobillo:'var(--purple)'};
+function mkState(){
+  const s={};
+  for(const side of SIDES){s[side]={};
+    for(const j of JOINTS) s[side][j]={buf:[],angle:0,max:0,min:180,exercise:'reposo'};
+  }
+  return s;
+}
+function mkMovs(){
+  const m={};
+  for(const side of SIDES) for(const j of JOINTS) m[`${j}_${side}`]={};
+  return m;
+}
+let jData=mkState(),registro=[],movs=mkMovs(),ticks=0,sesStart=null;
+function updateJoint(side,joint,ex,angle){
+  const d=jData[side][joint];
+  d.exercise=ex;d.angle=smoothAngle(d.buf,angle);
+  if(ex!=='reposo'&&d.angle>0){d.max=Math.max(d.max,d.angle);d.min=Math.min(d.min,d.angle);}
+}
+function tick(){
+  if(++ticks%30!==0) return;
+  if(!sesStart) sesStart=localISO();
+  const ts=new Date().toTimeString().slice(0,8);
+  for(const side of SIDES) for(const j of JOINTS){
+    const d=jData[side][j];
+    if(d.exercise!=='reposo'&&d.angle>0){
+      const m=META[d.exercise];
+      registro.push({timestamp:ts,lado:side,region:m.r,articulacion:j,ejercicio:d.exercise,angulo:Math.round(d.angle*100)/100});
+      const k=`${j}_${side}`;
+      movs[k][d.exercise]=Math.max(movs[k][d.exercise]||0,d.max);
+    }
+  }
+}
+
+// ── APACHE + SQLite API ───────────────────────────
+// Reemplaza con la URL de tu servicio en Render una vez desplegado
+// Ejemplo: 'https://romanalyzer-api.onrender.com/api/sessions'
+const API_URL='https://TU-APP.onrender.com/api/sessions';
+
+async function apiGet(path=''){
+  try{const r=await fetch(API_URL+path);if(!r.ok)return null;return r.json();}
+  catch(e){console.error('[ROM] GET'+path,e);return null;}
+}
+async function apiPost(body){
+  try{const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
+  catch(e){console.error('[ROM] POST',e);return false;}
+}
+async function apiPatch(id,body){
+  try{const r=await fetch(`${API_URL}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
+  catch(e){console.error('[ROM] PATCH',e);return false;}
+}
+async function apiDel(id){
+  try{const r=await fetch(`${API_URL}/${id}`,{method:'DELETE'});return r.ok;}
+  catch(e){console.error('[ROM] DELETE',e);return false;}
+}
+
+// ── STORAGE (Apache HTTP Server → PHP → SQLite) ───
+async function loadAll(){const d=await apiGet();return Array.isArray(d)?d:[];}
+async function nextId(){const d=await apiGet('/_maxid');return d?String((d.maxId||0)+1):'1';}
+async function saveSession(){
+  const sid=await nextId(),now=localISO();
+  const maxMin={};
+  for(const side of SIDES) for(const j of JOINTS){
+    const d=jData[side][j];
+    maxMin[`${j}_${side}`]={max:Math.round(d.max*100)/100,min:d.min<180?Math.round(d.min*100)/100:0};
+  }
+  const ses={id:sid,inicio:sesStart||now,fin:now,paciente:'',notas:'',tipo:'gonio_fullbody',
+    max_min:maxMin,movimientos_detectados:JSON.parse(JSON.stringify(movs)),registro:[...registro]};
+  const ok=await apiPost(ses);
+  if(!ok){toast('⚠ Error al guardar');return;}
+  registro=[];movs=mkMovs();sesStart=null;
+  const fl=document.getElementById('flash');
+  fl.classList.add('show');setTimeout(()=>fl.classList.remove('show'),300);
+  toast(`✓ Sesión #${sid} guardada`,true);renderSesList();
+}
+function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;toast('🔄 Reset completo');}
+async function updateSes(id,p,n){await apiPatch(id,{paciente:p,notas:n});}
+async function deleteSes(id){await apiDel(id);renderSesList();toast('Sesión eliminada');}
+async function exportSes(id){
+  const all=await loadAll();
+  const s=all.find(x=>x.id===id);if(!s)return;
+  const name=s.paciente?`sesion_${s.id}_${s.paciente.replace(/\s+/g,'_')}.json`:`sesion_${s.id}.json`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,4)],{type:'application/json'}));
+  a.download=name;a.click();
+}
+function importJSON(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=async e=>{
+    try{
+      const d=JSON.parse(e.target.result);if(!d.id)throw 0;
+      const all=await loadAll();
+      if(all.find(s=>s.id===d.id)){toast('⚠ Sesión ya existe');return;}
+      const ok=await apiPost(d);
+      if(ok){renderSesList();toast('✓ Sesión importada',true);}else{toast('⚠ Error al importar');}
+    }catch{toast('⚠ Archivo inválido');}
+  };
+  r.readAsText(f);inp.value='';
+}
+
+// ── MEDIAPIPE ─────────────────────────────────────
+// #vid CSS scaleX(-1) → usuario ve espejo
+// #cvs sin CSS → JS espeja el dibujo para alinear puntos con el video
+// MediaPipe recibe video crudo → R_=derecho, L_=izquierdo
+const vid=document.getElementById('vid');
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+let pose,cameraOn=false,poseReady=false,facingMode='user';
+
+function onResults(res){
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  const lm=res.poseLandmarks;
+  if(lm&&lm.length>0){
+    setStatus('on','Detectando');
+    ctx.save();
+    if(facingMode==='user'){ctx.translate(cvs.width,0);ctx.scale(-1,1);}
+    if(window.drawConnectors&&window.POSE_CONNECTIONS){
+      drawConnectors(ctx,lm,POSE_CONNECTIONS,{color:'rgba(30,60,200,0.85)',lineWidth:3});
+      drawLandmarks(ctx,lm,{color:'#00e5cc',fillColor:'#00e5cc',lineWidth:1,radius:5});
+    }
+    ctx.restore();
+    const L={sh:11,el:13,wr:15,hip:23,kn:25,an:27,fi:31};
+    const R={sh:12,el:14,wr:16,hip:24,kn:26,an:28,fi:32};
+    const map={
+      derecho:  {sh:lm[R.sh],el:lm[R.el],wr:lm[R.wr],hip:lm[R.hip],kn:lm[R.kn],an:lm[R.an],fi:lm[R.fi]},
+      izquierdo:{sh:lm[L.sh],el:lm[L.el],wr:lm[L.wr],hip:lm[L.hip],kn:lm[L.kn],an:lm[L.an],fi:lm[L.fi]},
+    };
+    for(const side of SIDES){
+      const {sh,el,wr,hip,kn,an,fi}=map[side];
+      const vs=Math.min(sh.visibility||0,el.visibility||0,wr.visibility||0);
+      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0);
+      if(vs>=VIS){
+        const[exS,aS]=analyzeShoulder(sh,el,hip);updateJoint(side,'hombro',exS||'reposo',aS);
+        const[exE,aE]=analyzeElbow(sh,el,wr);    updateJoint(side,'codo',  exE||'reposo',aE);
+      }else{updateJoint(side,'hombro','reposo',0);updateJoint(side,'codo','reposo',0);}
+      if(vi>=VIS){
+        const[exH,aH]=analyzeHip(sh,hip,kn,side);updateJoint(side,'cadera', exH||'reposo',aH);
+        const[exK,aK]=analyzeKnee(hip,kn,an);    updateJoint(side,'rodilla',exK||'reposo',aK);
+        const[exA,aA]=analyzeAnkle(kn,an,fi);    updateJoint(side,'tobillo',exA||'reposo',aA);
+      }else{updateJoint(side,'cadera','reposo',0);updateJoint(side,'rodilla','reposo',0);updateJoint(side,'tobillo','reposo',0);}
+    }
+    tick();renderAP();
+  }else{
+    setStatus('warn','Sin detectar');
+    ctx.fillStyle='rgba(255,68,102,0.9)';
+    ctx.font='bold 14px JetBrains Mono,monospace';
+    ctx.textAlign='center';
+    ctx.fillText('⚠ NO SE DETECTA PERSONA',cvs.width/2,34);
+  }
+}
+async function initPose(){
+  ldMsg('Cargando modelo de pose…');
+  pose=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${f}`});
+  pose.setOptions({modelComplexity:1,smoothLandmarks:true,enableSegmentation:false,
+    smoothSegmentation:false,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+  pose.onResults(onResults);
+  ldMsg('Inicializando modelo WASM…');
+  await pose.initialize();
+  ldMsg('Activando cámara…');
+  await startCam();
+}
+async function startCam(mode){
+  if(mode) facingMode=mode;
+  let stream=null;
+  for(const c of [{video:{facingMode:facingMode,width:{ideal:640},height:{ideal:480}}},{video:true}]){
+    try{stream=await navigator.mediaDevices.getUserMedia(c);break;}catch(e){}
+  }
+  if(!stream) throw new Error('No se pudo acceder a la cámara');
+  vid.srcObject=stream;
+  await new Promise(res=>{vid.onloadedmetadata=res;});
+  await vid.play();
+  // Espejo CSS solo para cámara frontal; trasera no necesita espejo
+  vid.style.transform=facingMode==='user'?'scaleX(-1)':'scaleX(1)';
+  cameraOn=true;poseReady=true;
+  document.getElementById('ld').style.opacity='0';
+  setTimeout(()=>document.getElementById('ld').style.display='none',400);
+  setStatus('warn','Buscando…');
+  loop();
+}
+async function switchCam(){
+  const btn=document.getElementById('fab-flip');
+  if(btn) btn.style.pointerEvents='none';
+  cameraOn=false;
+  if(vid.srcObject) vid.srcObject.getTracks().forEach(t=>t.stop());
+  const newMode=facingMode==='user'?'environment':'user';
+  setStatus('warn','Cambiando cámara…');
+  try{
+    await startCam(newMode);
+    toast(newMode==='environment'?'📷 Cámara trasera':'🤳 Cámara frontal',true);
+  }catch(e){
+    // Fallback: volver a la cámara anterior si falla
+    cameraOn=true;
+    toast('⚠ No se pudo cambiar de cámara');
+    await startCam(facingMode==='user'?'environment':'user');
+  }
+  if(btn) btn.style.pointerEvents='';
+}
+async function loop(){
+  if(!cameraOn) return;
+  if(vid.readyState>=2){
+    const w=vid.videoWidth||640,h=vid.videoHeight||480;
+    if(cvs.width!==w||cvs.height!==h){cvs.width=w;cvs.height=h;}
+    try{await pose.send({image:vid});}catch(e){}
+  }
+  requestAnimationFrame(loop);
+}
+
+// ── UI: PANEL DE ÁNGULOS ──────────────────────────
+function renderAP(){
+  document.getElementById('ap-sup').innerHTML=J_SUP.flatMap(j=>SIDES.map(s=>apCard(j,s))).join('');
+  document.getElementById('ap-inf').innerHTML=J_INF.flatMap(j=>SIDES.map(s=>apCard(j,s))).join('');
+}
+function apCard(j,side){
+  const d=jData[side][j],col=COLS[j],active=d.exercise!=='reposo';
+  return `<div class="apc">
+    <div class="apc-lbl">${j.toUpperCase()}·${side==='derecho'?'D':'I'}</div>
+    <div class="apc-val" style="color:${active?col:'var(--txt3)'}">${active?Math.round(d.angle):0}<span>°</span></div>
+    <div class="apc-ex"  style="color:${active?col:'var(--txt3)'}">${active?(META[d.exercise]?.n||d.exercise):'—'}</div>
+    <div class="apc-max">MAX ${Math.round(d.max)}°</div>
+  </div>`;
+}
+
+// ── UI: SESIONES ──────────────────────────────────
+let qFilter='';
+function filterSes(v){qFilter=v;renderSesList();}
+async function renderSesList(){
+  const all=await loadAll(),q=qFilter.toLowerCase();
+  const list=q?all.filter(s=>(s.paciente||'').toLowerCase().includes(q)||s.id.includes(q)):all;
+  document.getElementById('ses-count').textContent=`${list.length} sesión${list.length!==1?'es':''}`;
+  const el=document.getElementById('ses-list');
+  if(!list.length){
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-txt">${q?`Sin resultados para "${q}"`:'No hay sesiones guardadas.'}</div></div>`;
+    return;
+  }
+  el.innerHTML=list.map(s=>`
+    <div class="si" onclick="openDet('${s.id}')">
+      <div class="si-top"><span class="si-id">Sesión #${s.id}</span><span class="si-arr">›</span></div>
+      <div class="si-name ${!s.paciente?'empty':''}">${s.paciente||'Sin paciente asignado'}</div>
+      <div class="si-date">${(s.inicio||'—').slice(0,16)}</div>
+    </div>`).join('');
+}
+
+// ── UI: DETALLE ───────────────────────────────────
+let detId=null,formOpen=false;
+async function openDet(id){detId=id;formOpen=false;document.getElementById('det-title').textContent=`Sesión #${id}`;await renderDet();goScreen('det');}
+async function renderDet(){
+  const s=(await loadAll()).find(x=>x.id===detId);if(!s)return;
+  function jCard(j,side){
+    const k=`${j}_${side}`,d=s.max_min?.[k]||{max:0,min:0},col=COLS[j];
+    const entries=Object.entries(s.movimientos_detectados?.[k]||{});
+    return `<div class="jcard">
+      <div class="jcard-ttl"><span class="dot2" style="background:${col}"></span>${j.toUpperCase()} · ${side==='derecho'?'DER.':'IZQ.'}</div>
+      <div class="jbody">
+        <div><div class="jval-lbl">Máximo</div><div class="jval-num" style="color:${col}">${(d.max||0).toFixed(0)}</div><div class="jval-unit">grados</div></div>
+        <div><div class="jval-lbl">Mínimo act.</div><div class="jval-num">${d.min>0?d.min.toFixed(0):'—'}</div><div class="jval-unit">grados</div></div>
+      </div>
+      ${entries.length?`<div class="divider"></div>${entries.map(([ex,a])=>`<div class="mv-row"><div class="mv-name">${ex.replace(/_/g,' ')}</div><div class="mv-ang" style="color:${col}">${parseFloat(a).toFixed(0)}°</div></div>`).join('')}`:''}
+    </div>`;
+  }
+  const regs=s.registro||[];
+  document.getElementById('det-body').innerHTML=`
+    <div class="shd-card">
+      <div class="snum"><span class="snum-l">SES</span><span class="snum-v">#${s.id}</span></div>
+      <div class="sinfo">
+        <div class="sname ${!s.paciente?'empty':''}">${s.paciente||'Sin paciente asignado'}</div>
+        <div class="sdates">${(s.inicio||'—').slice(0,16)}${s.fin?' → '+(s.fin||'').slice(11,16):''}</div>
+        ${s.notas?`<div class="snotes">${s.notas}</div>`:''}
+      </div>
+    </div>
+    ${formOpen?`<div class="aform">
+      <div class="aform-title">Asignar paciente — Sesión #${s.id}</div>
+      <div class="field"><label>Nombre</label><input type="text" id="fn" value="${s.paciente||''}" placeholder="Ej: Carlos Mendoza"></div>
+      <div class="field"><label>Notas clínicas</label><textarea id="fno" placeholder="Diagnóstico, observaciones…">${s.notas||''}</textarea></div>
+      <div class="btn-row">
+        <button class="btn btn-p" onclick="guardar('${s.id}')">Guardar</button>
+        <button class="btn btn-g" onclick="toggleForm()">Cancelar</button>
+      </div>
+    </div>`:''}
+    <div class="tabs-row">
+      <div class="tab on" id="tb-sup" onclick="detTab('sup')">Tren Superior</div>
+      <div class="tab"    id="tb-inf" onclick="detTab('inf')">Tren Inferior</div>
+      <div class="tab"    id="tb-reg" onclick="detTab('reg')">Registro</div>
+    </div>
+    <div class="tc on" id="tc-sup"><div class="jgrid">
+      ${jCard('hombro','derecho')}${jCard('hombro','izquierdo')}
+      ${jCard('codo','derecho')}${jCard('codo','izquierdo')}
+    </div></div>
+    <div class="tc" id="tc-inf"><div class="jgrid">
+      ${jCard('cadera','derecho')}${jCard('cadera','izquierdo')}
+      ${jCard('rodilla','derecho')}${jCard('rodilla','izquierdo')}
+      ${jCard('tobillo','derecho')}${jCard('tobillo','izquierdo')}
+    </div></div>
+    <div class="tc" id="tc-reg">
+      ${regs.length
+        ?`<div class="tbl-wrap"><table>
+            <thead><tr><th>Hora</th><th>Lado</th><th>Región</th><th>Articulación</th><th>Ejercicio</th><th>Ángulo</th></tr></thead>
+            <tbody>${regs.map(r=>`<tr>
+              <td><span class="badge">${r.timestamp}</span></td><td>${r.lado}</td>
+              <td><span class="${r.region==='superior'?'rt-sup':'rt-inf'}">${r.region}</span></td>
+              <td>${r.articulacion}</td><td>${r.ejercicio.replace(/_/g,' ')}</td>
+              <td style="color:var(--cyan);font-family:var(--mono);font-weight:600">${r.angulo}°</td>
+            </tr>`).join('')}</tbody>
+          </table></div>`
+        :`<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-txt">Sin registros</div></div>`}
+    </div>`;
+  document.getElementById('det-acts').innerHTML=`
+    <button class="btn btn-g" onclick="toggleForm()" style="flex:1">✏️ Asignar</button>
+    <button class="btn btn-p" onclick="exportSes('${s.id}')" style="flex:1">⬇️ Exportar</button>
+    <button class="btn btn-d" onclick="confirmDel('${s.id}')">🗑️</button>`;
+}
+function detTab(n){
+  ['sup','inf','reg'].forEach(x=>{
+    document.getElementById('tc-'+x).classList.toggle('on',x===n);
+    document.getElementById('tb-'+x).classList.toggle('on',x===n);
+  });
+}
+function toggleForm(){formOpen=!formOpen;renderDet();}
+async function guardar(id){
+  await updateSes(id,document.getElementById('fn').value.trim(),document.getElementById('fno').value.trim());
+  formOpen=false;await renderDet();renderSesList();toast('✓ Paciente asignado',true);
+}
+async function confirmDel(id){if(confirm(`¿Borrar sesión #${id}?`)){await deleteSes(id);goBack();}}
+
+// ── NAVEGACIÓN ────────────────────────────────────
+let curScreen='cam';
+function goScreen(name){
+  ['cam','ses','det'].forEach(s=>document.getElementById('sc-'+s).classList.toggle('off',s!==name));
+  document.getElementById('nb-cam').classList.toggle('on',name==='cam');
+  document.getElementById('nb-ses').classList.toggle('on',name==='ses'||name==='det');
+  document.getElementById('botnav').classList.toggle('off',name==='det');
+  if(name==='ses') renderSesList();
+  curScreen=name;
+}
+function goBack(){goScreen(curScreen==='det'?'ses':'cam');}
+
+// ── TOAST / HELPERS ───────────────────────────────
+let tTimer;
+function toast(msg,green=false){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className='show'+(green?' g':'');
+  clearTimeout(tTimer);tTimer=setTimeout(()=>el.className='',2500);
+}
+function ldMsg(m){document.getElementById('ld-msg').textContent=m;}
+function setStatus(state,txt){
+  document.getElementById('sDot').className='dot'+(state==='on'?' on':state==='warn'?' warn':'');
+  document.getElementById('sTxt').textContent=txt;
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='s'||e.key==='S') saveSession();
+  if(e.key==='r'||e.key==='R') resetSession();
+});
+
+// ── INICIO ────────────────────────────────────────
+document.getElementById('ld').style.transition='opacity .4s';
+if(location.protocol!=='https:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1'){
+  document.getElementById('ld').style.display='none';
+  document.getElementById('https-err').style.display='flex';
+}else{
+  window.addEventListener('load',()=>setTimeout(initPose,300));
+}
+</script>
+</body>
+</html>
