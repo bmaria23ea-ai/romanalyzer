@@ -586,7 +586,7 @@ function tick(){
 // ── APACHE + SQLite API ───────────────────────────
 // Reemplaza con la URL de tu servicio en Render una vez desplegado
 // Ejemplo: 'https://romanalyzer-api.onrender.com/api/sessions'
-const API_URL='https://romanalyzer-backend.onrender.com/api/sessions';
+const API_URL='https://romanalyzer-backend.onrender.com/api/sessions.php';
 
 async function apiGet(path=''){
   try{const r=await fetch(API_URL+path);if(!r.ok)return null;return r.json();}
