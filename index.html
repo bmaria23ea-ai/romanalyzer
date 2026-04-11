@@ -597,11 +597,11 @@ async function apiPost(body){
   catch(e){console.error('[ROM] POST',e);return false;}
 }
 async function apiPatch(id,body){
-  try{const r=await fetch(`${API_URL}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
+  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
   catch(e){console.error('[ROM] PATCH',e);return false;}
 }
 async function apiDel(id){
-  try{const r=await fetch(`${API_URL}/${id}`,{method:'DELETE'});return r.ok;}
+  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'DELETE'});return r.ok;}
   catch(e){console.error('[ROM] DELETE',e);return false;}
 }
 
