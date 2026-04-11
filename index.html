@@ -586,18 +586,18 @@ function tick(){
 // ── APACHE + SQLite API ───────────────────────────
 // Reemplaza con la URL de tu servicio en Render una vez desplegado
 // Ejemplo: 'https://romanalyzer-api.onrender.com/api/sessions'
-const API_URL='https://TU-APP.onrender.com/api/sessions';
+const API_URL='https://romanalyzer-backend.onrender.com/api/sessions.php';
 
 async function apiGet(path=''){
   try{const r=await fetch(API_URL+path);if(!r.ok)return null;return r.json();}
   catch(e){console.error('[ROM] GET'+path,e);return null;}
 }
 async function apiPost(body){
-  try{const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
+  try{const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
   catch(e){console.error('[ROM] POST',e);return false;}
 }
 async function apiPatch(id,body){
-  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.ok;}
+  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'PATCH',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
   catch(e){console.error('[ROM] PATCH',e);return false;}
 }
 async function apiDel(id){
