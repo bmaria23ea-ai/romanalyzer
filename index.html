@@ -586,7 +586,7 @@ function tick(){
 // ── APACHE + SQLite API ───────────────────────────
 // Reemplaza con la URL de tu servicio en Render una vez desplegado
 // Ejemplo: 'https://romanalyzer-api.onrender.com/api/sessions'
-const API_URL='https://romanalyzer-backend.onrender.com/api/sessions.php';
+const API_URL='https://TU-APP.onrender.com/api/sessions';
 
 async function apiGet(path=''){
   try{const r=await fetch(API_URL+path);if(!r.ok)return null;return r.json();}
@@ -607,7 +607,7 @@ async function apiDel(id){
 
 // ── STORAGE (Apache HTTP Server → PHP → SQLite) ───
 async function loadAll(){const d=await apiGet();return Array.isArray(d)?d:[];}
-async function nextId(){const d=await apiGet('/_maxid');return d?String((d.maxId||0)+1):'1';}
+async function nextId(){const d=await apiGet('?maxid=1');return d?String((d.maxId||0)+1):'1';}
 async function saveSession(){
   const sid=await nextId(),now=localISO();
   const maxMin={};
