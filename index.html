@@ -29,11 +29,11 @@ html,body { height:100%; overflow:hidden; background:var(--bg); color:var(--txt)
 button,input,textarea { font-family:var(--head); outline:none; border:none; }
 button { cursor:pointer; }
 
-/* ── SCREENS ── */
+/*PANTALLAS*/
 .screen { position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden; }
 .screen.off { display:none !important; }
 
-/* ── SHARED HEADER ── */
+/*ENCABEZADO COMPARTIDO*/
 .hd {
   flex-shrink:0; height:var(--hd-h);
   background:var(--bg1); border-bottom:1px solid var(--line);
@@ -58,7 +58,7 @@ button { cursor:pointer; }
 .dot.on   { background:var(--green);  box-shadow:0 0 6px var(--green); }
 .dot.warn { background:var(--orange); box-shadow:0 0 6px var(--orange); }
 
-/* ── BOTTOM NAV ── */
+/*BOTONES NAVEGACIÓN*/
 .bot-nav {
   position:fixed; bottom:0; left:0; right:0;
   height:calc(var(--nav-h) + var(--safe-b));
@@ -77,9 +77,7 @@ button { cursor:pointer; }
 .nb.on  { color:var(--cyan); }
 .nb.on svg { filter:drop-shadow(0 0 4px var(--cyan)); }
 
-/* ══════════════════════════════════════════
-   SCREEN: CÁMARA
-══════════════════════════════════════════ */
+/*CÁMARA*/
 #sc-cam { background:#000; }
 
 .cam-wrap {
@@ -88,11 +86,11 @@ button { cursor:pointer; }
   margin-bottom:var(--nav-h);
 }
 
-/* Video CSS espejo → se aplica dinámicamente por JS según la cámara activa */
+/*Video: espejo*/
 #vid { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
 #cvs { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 
-/* FABs */
+/*BOTONES FLOTANTES*/
 .fab-col { position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:8px; z-index:20; }
 .fab {
   width:48px; height:48px; border-radius:13px;
@@ -105,7 +103,7 @@ button { cursor:pointer; }
 .fab-r { background:rgba(255,68,102,.12); border-color:rgba(255,68,102,.3); }
 .fab-c { background:rgba(77,184,255,.15); border-color:rgba(77,184,255,.4); }
 
-/* Angle panel */
+/*PANEL DE ANGULOS*/
 .ap {
   position:absolute; bottom:0; left:0; right:0;
   background:linear-gradient(to top,rgba(7,8,15,.97) 65%,transparent);
@@ -122,13 +120,11 @@ button { cursor:pointer; }
 .apc-ex  { font-family:var(--mono); font-size:7px; color:var(--txt2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
 .apc-max { font-family:var(--mono); font-size:7px; color:var(--txt3); }
 
-/* Flash */
+/*Destello de guardado*/
 .flash { position:absolute; inset:0; background:rgba(0,229,204,.18); opacity:0; pointer-events:none; transition:opacity .3s; z-index:50; }
 .flash.show { opacity:1; }
 
-/* ══════════════════════════════════════════
-   SCREEN: SESIONES
-══════════════════════════════════════════ */
+/*PANTALLA: SESIONES*/
 #sc-ses { background:var(--bg); }
 .ses-body { flex:1; overflow-y:auto; padding:8px 10px 10px; margin-bottom:var(--nav-h); }
 
@@ -168,9 +164,7 @@ button { cursor:pointer; }
 .empty-icon  { font-size:38px; opacity:.2; }
 .empty-txt   { font-family:var(--mono); font-size:10px; color:var(--txt3); text-align:center; line-height:1.7; }
 
-/* ══════════════════════════════════════════
-   SCREEN: DETALLE SESIÓN
-══════════════════════════════════════════ */
+/*PANTALLA: DETALLE SESIÓN*/
 #sc-det { background:var(--bg); }
 
 .back-hd {
@@ -194,7 +188,7 @@ button { cursor:pointer; }
   padding-bottom:calc(10px + var(--safe-b)); z-index:50;
 }
 
-/* Session header card */
+/* Tarjeta de encabezado en sesiones*/
 .shd-card {
   background:var(--bg1); border:1px solid var(--line); border-radius:10px;
   padding:14px; display:flex; gap:12px; align-items:flex-start; margin-bottom:10px;
@@ -212,7 +206,7 @@ button { cursor:pointer; }
 .sdates { font-family:var(--mono); font-size:9px; color:var(--txt3); margin-top:3px; }
 .snotes { font-size:11px; color:var(--txt2); margin-top:4px; }
 
-/* Assign form */
+/* Asignar*/
 .aform {
   background:var(--bg2); border:1px solid var(--line2); border-radius:10px;
   padding:14px; margin-bottom:10px; display:flex; flex-direction:column; gap:10px;
@@ -226,7 +220,7 @@ button { cursor:pointer; }
 .field textarea { resize:none; height:64px; }
 .field input:focus,.field textarea:focus { border-color:var(--cyan); }
 
-/* Tabs */
+/*Pestañas*/
 .tabs-row { display:flex; gap:4px; margin-bottom:10px; flex-wrap:wrap; }
 .tab {
   padding:6px 12px; border-radius:6px; font-family:var(--mono); font-size:9px;
@@ -237,7 +231,7 @@ button { cursor:pointer; }
 .tc { display:none; }
 .tc.on { display:block; }
 
-/* Joint cards */
+/*Tarjeta de articulaciones*/
 .jgrid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
 .jcard {
   background:var(--bg1); border:1px solid var(--line); border-radius:8px; padding:11px;
@@ -257,7 +251,7 @@ button { cursor:pointer; }
 .mv-name   { font-size:8px; color:var(--txt2); font-family:var(--mono); }
 .mv-ang    { font-family:var(--mono); font-size:11px; font-weight:600; }
 
-/* Registro table */
+/*Tabla de registro*/
 .tbl-wrap { border-radius:8px; border:1px solid var(--line); overflow-x:auto; }
 table     { width:100%; border-collapse:collapse; }
 thead th  {
@@ -271,7 +265,7 @@ tbody tr:last-child td { border-bottom:none; }
 .rt-sup   { display:inline-flex; padding:2px 6px; border-radius:4px; font-family:var(--mono); font-size:8px; font-weight:600; background:var(--blue-d); color:var(--blue); border:1px solid rgba(77,184,255,.2); }
 .rt-inf   { display:inline-flex; padding:2px 6px; border-radius:4px; font-family:var(--mono); font-size:8px; font-weight:600; background:var(--orange-d); color:var(--orange); border:1px solid rgba(255,140,66,.2); }
 
-/* Buttons */
+/*Botones*/
 .btn { padding:9px 16px; border-radius:7px; font-size:11px; font-weight:600; transition:all .15s; border:1px solid transparent; cursor:pointer; }
 .btn:active { transform:scale(.97); }
 .btn-p { background:var(--cyan); color:#000; border-color:var(--cyan); }
@@ -280,7 +274,7 @@ tbody tr:last-child td { border-bottom:none; }
 .btn-d { background:transparent; color:var(--red); border-color:rgba(255,68,102,.3); }
 .btn-row { display:flex; gap:8px; }
 
-/* Toast */
+/*Notificaciones*/
 #toast {
   position:fixed; bottom:calc(var(--nav-h) + 14px); left:50%;
   transform:translateX(-50%) translateY(14px);
@@ -292,7 +286,7 @@ tbody tr:last-child td { border-bottom:none; }
 #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 #toast.g    { border-color:rgba(0,229,204,.3); color:var(--cyan); }
 
-/* Loading */
+/*Cargando*/
 #ld {
   position:fixed; inset:0; background:var(--bg); z-index:500;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
@@ -321,7 +315,7 @@ tbody tr:last-child td { border-bottom:none; }
 </head>
 <body>
 
-<!-- ── LOADING ── -->
+<!--CARGANDO-->
 <div id="ld">
   <div class="ld-logo">
     <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round">
@@ -335,18 +329,16 @@ tbody tr:last-child td { border-bottom:none; }
   <div class="ld-bar"><div class="ld-fill"></div></div>
 </div>
 
-<!-- ── HTTPS ERROR ── -->
+<!-- HTTPS ERROR-->
 <div id="https-err">
   <h2>⚠ Se requiere HTTPS</h2>
   <p>Para acceder a la cámara desde un celular<br>el archivo debe servirse desde HTTPS.<br><br>Súbelo a GitHub Pages o usa localhost.</p>
 </div>
 
-<!-- ── TOAST ── -->
+<!--NOTIFICACIONES-->
 <div id="toast"></div>
 
-<!-- ════════════════════════════════════════
-     SCREEN 1 — CÁMARA
-════════════════════════════════════════ -->
+<!--CÁMARA-->
 <div id="sc-cam" class="screen">
   <div class="hd">
     <div class="logo-mark">
@@ -380,9 +372,7 @@ tbody tr:last-child td { border-bottom:none; }
   </div>
 </div>
 
-<!-- ════════════════════════════════════════
-     SCREEN 2 — SESIONES
-════════════════════════════════════════ -->
+<!-- SESIONES -->
 <div id="sc-ses" class="screen off">
   <div class="hd">
     <div class="logo-mark">
@@ -408,9 +398,7 @@ tbody tr:last-child td { border-bottom:none; }
   </div>
 </div>
 
-<!-- ════════════════════════════════════════
-     SCREEN 3 — DETALLE
-════════════════════════════════════════ -->
+<!-- DETALLES -->
 <div id="sc-det" class="screen off">
   <div class="back-hd">
     <button class="back-btn" onclick="goBack()">← Atrás</button>
@@ -420,7 +408,7 @@ tbody tr:last-child td { border-bottom:none; }
   <div class="det-acts" id="det-acts"></div>
 </div>
 
-<!-- ── BOTTOM NAV ── -->
+<!-- NAVEGACIÓN -->
 <nav class="bot-nav" id="botnav">
   <button class="nb on" id="nb-cam" onclick="goScreen('cam')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -442,7 +430,7 @@ tbody tr:last-child td { border-bottom:none; }
 <script>
 'use strict';
 
-// ── MATH ──────────────────────────────────────────
+//operaciones matemáticas
 const DEG=r=>r*180/Math.PI;
 function vNorm(v){ return Math.sqrt(v.reduce((s,x)=>s+x*x,0)); }
 function vDot(a,b){ return a.reduce((s,x,i)=>s+x*b[i],0); }
@@ -466,7 +454,7 @@ function smoothAngle(buf,val,maxLen=5,clip=15){
   return buf.reduce((s,v)=>s+v,0)/buf.length;
 }
 
-// ── ANÁLISIS (idéntico al Python original) ────────
+// análisis
 const THR=12, VIS=0.50;
 const META={
   flexion_hombro:          {n:'Flexión',      r:'superior'},
@@ -542,7 +530,7 @@ function analyzeAnkle(kn,an,fi){
   const p=Math.min(180-ang,60);return p>=25?['flexion_plantar_tobillo',p]:[null,0];
 }
 
-// ── ESTADO ────────────────────────────────────────
+// estado
 function localISO(d=new Date()){
   return d.toLocaleString('sv-SE').replace('T',' ');
 }
@@ -583,10 +571,8 @@ function tick(){
   }
 }
 
-// ── APACHE + SQLite API ───────────────────────────
-// Reemplaza con la URL de tu servicio en Render una vez desplegado
-// Ejemplo: 'https://romanalyzer-api.onrender.com/api/sessions'
-const API_URL='https://romanalyzer-backend.onrender.com/api/sessions.php';
+// APACHE y SQLite API,  URL de tu servicio en Render 
+const API_URL='https://backend.onrender.com/api/sesiones.php';
 
 async function apiGet(path=''){
   try{const r=await fetch(API_URL+path);if(!r.ok)return null;return r.json();}
@@ -605,7 +591,7 @@ async function apiDel(id){
   catch(e){console.error('[ROM] DELETE',e);return false;}
 }
 
-// ── STORAGE (Apache HTTP Server → PHP → SQLite) ───
+// Apache HTTP Server, PHP, SQLite
 async function loadAll(){const d=await apiGet();return Array.isArray(d)?d:[];}
 async function nextId(){const d=await apiGet('?maxid=1');return d?String((d.maxId||0)+1):'1';}
 async function saveSession(){
@@ -650,10 +636,7 @@ function importJSON(inp){
   r.readAsText(f);inp.value='';
 }
 
-// ── MEDIAPIPE ─────────────────────────────────────
-// #vid CSS scaleX(-1) → usuario ve espejo
-// #cvs sin CSS → JS espeja el dibujo para alinear puntos con el video
-// MediaPipe recibe video crudo → R_=derecho, L_=izquierdo
+// MEDIAPIPE 
 const vid=document.getElementById('vid');
 const cvs=document.getElementById('cvs');
 const ctx=cvs.getContext('2d');
@@ -721,7 +704,7 @@ async function startCam(mode){
   vid.srcObject=stream;
   await new Promise(res=>{vid.onloadedmetadata=res;});
   await vid.play();
-  // Espejo CSS solo para cámara frontal; trasera no necesita espejo
+  // Espejo cámara frontal
   vid.style.transform=facingMode==='user'?'scaleX(-1)':'scaleX(1)';
   cameraOn=true;poseReady=true;
   document.getElementById('ld').style.opacity='0';
@@ -740,7 +723,7 @@ async function switchCam(){
     await startCam(newMode);
     toast(newMode==='environment'?'📷 Cámara trasera':'🤳 Cámara frontal',true);
   }catch(e){
-    // Fallback: volver a la cámara anterior si falla
+    // volver a la cámara anterior si falla
     cameraOn=true;
     toast('⚠ No se pudo cambiar de cámara');
     await startCam(facingMode==='user'?'environment':'user');
@@ -757,7 +740,7 @@ async function loop(){
   requestAnimationFrame(loop);
 }
 
-// ── UI: PANEL DE ÁNGULOS ──────────────────────────
+//UI:PANEL DE ÁNGULOS
 function renderAP(){
   document.getElementById('ap-sup').innerHTML=J_SUP.flatMap(j=>SIDES.map(s=>apCard(j,s))).join('');
   document.getElementById('ap-inf').innerHTML=J_INF.flatMap(j=>SIDES.map(s=>apCard(j,s))).join('');
@@ -772,7 +755,7 @@ function apCard(j,side){
   </div>`;
 }
 
-// ── UI: SESIONES ──────────────────────────────────
+//UI:SESIONES 
 let qFilter='';
 function filterSes(v){qFilter=v;renderSesList();}
 async function renderSesList(){
@@ -792,7 +775,7 @@ async function renderSesList(){
     </div>`).join('');
 }
 
-// ── UI: DETALLE ───────────────────────────────────
+//UI: DETALLE
 let detId=null,formOpen=false;
 async function openDet(id){detId=id;formOpen=false;document.getElementById('det-title').textContent=`Sesión #${id}`;await renderDet();goScreen('det');}
 async function renderDet(){
@@ -873,7 +856,7 @@ async function guardar(id){
 }
 async function confirmDel(id){if(confirm(`¿Borrar sesión #${id}?`)){await deleteSes(id);goBack();}}
 
-// ── NAVEGACIÓN ────────────────────────────────────
+//NAVEGACIÓN 
 let curScreen='cam';
 function goScreen(name){
   ['cam','ses','det'].forEach(s=>document.getElementById('sc-'+s).classList.toggle('off',s!==name));
@@ -885,7 +868,7 @@ function goScreen(name){
 }
 function goBack(){goScreen(curScreen==='det'?'ses':'cam');}
 
-// ── TOAST / HELPERS ───────────────────────────────
+// NOTIFICACIONES
 let tTimer;
 function toast(msg,green=false){
   const el=document.getElementById('toast');
@@ -902,7 +885,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='r'||e.key==='R') resetSession();
 });
 
-// ── INICIO ────────────────────────────────────────
+//INICIO
 document.getElementById('ld').style.transition='opacity .4s';
 if(location.protocol!=='https:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1'){
   document.getElementById('ld').style.display='none';
