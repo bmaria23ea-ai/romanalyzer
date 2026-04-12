@@ -572,7 +572,7 @@ function tick(){
 }
 
 // APACHE y SQLite API,  URL de tu servicio en Render 
-const API_URL='https://backend.onrender.com/api/sesiones.php';
+const API_URL = 'https://backend-d2fb.onrender.com/api/sesiones.php';
 
 async function apiGet(path=''){
   try{const r=await fetch(API_URL+path);if(!r.ok)return null;return r.json();}
