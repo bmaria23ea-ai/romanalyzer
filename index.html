@@ -572,22 +572,25 @@ function tick(){
 }
 
 // APACHE y SQLite API,  URL de tu servicio en Render 
-const API_URL = 'https://backend-d2fb.onrender.com/api/sesiones.php';
+const API_URL='https://backend.onrender.com/api/sesiones.php';
+// ⚠ Reemplaza este valor con el ROM_API_KEY generado en Render → Environment
+const API_KEY='-xK9mP3qL7nR2wT8v';
+const API_H={'X-API-Key':API_KEY};
 
 async function apiGet(path=''){
-  try{const r=await fetch(API_URL+path);if(!r.ok)return null;return r.json();}
+  try{const r=await fetch(API_URL+path,{headers:API_H});if(!r.ok)return null;return r.json();}
   catch(e){console.error('[ROM] GET'+path,e);return null;}
 }
 async function apiPost(body){
-  try{const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
+  try{const r=await fetch(API_URL,{method:'POST',headers:{...API_H,'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
   catch(e){console.error('[ROM] POST',e);return false;}
 }
 async function apiPatch(id,body){
-  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'PATCH',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
+  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'PATCH',headers:{...API_H,'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
   catch(e){console.error('[ROM] PATCH',e);return false;}
 }
 async function apiDel(id){
-  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'DELETE'});return r.ok;}
+  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'DELETE',headers:API_H});return r.ok;}
   catch(e){console.error('[ROM] DELETE',e);return false;}
 }
 
