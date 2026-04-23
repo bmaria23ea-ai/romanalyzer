@@ -722,7 +722,7 @@ async function initPose(){
 async function startCam(mode){
   if(mode) facingMode=mode;
   let stream=null;
-  for(const c of [{video:{facingMode:facingMode,width:{ideal:640},height:{ideal:480}}},{video:true}]){
+  for(const c of [{video:{facingMode:facingMode,width:{ideal:1280},height:{ideal:720}}},{video:true}]){
     try{stream=await navigator.mediaDevices.getUserMedia(c);break;}catch(e){}
   }
   if(!stream) throw new Error('No se pudo acceder a la cámara');
