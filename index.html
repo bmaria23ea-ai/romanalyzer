@@ -524,10 +524,31 @@ function analyzeKnee(hip,kn,an){
   if(flex>10) return ['flexion_rodilla',flex];
   return ['extension_rodilla',ang>160?0:180-ang];
 }
-function analyzeAnkle(kn,an,fi){
-  const ang=vecAngle([kn.x-an.x,kn.y-an.y],[fi.x-an.x,fi.y-an.y]);
-  if(fi.y<an.y){const d=Math.min(ang,30);return d>=25?['dorsiflexion_tobillo',d]:[null,0];}
-  const p=Math.min(180-ang,60);return p>=25?['flexion_plantar_tobillo',p]:[null,0];
+//function analyzeAnkle(kn,an,fi){
+//  const ang=vecAngle([kn.x-an.x,kn.y-an.y],[fi.x-an.x,fi.y-an.y]);
+//  if(fi.y<an.y){const d=Math.min(ang,30);return d>=25?['dorsiflexion_tobillo',d]:[null,0];}
+//  const p=Math.min(180-ang,60);return p>=25?['flexion_plantar_tobillo',p]:[null,0];
+//}
+function analyzeAnkle(kn, an, fi){
+  if (!fi || (fi.visibility || 0) < 0.70) return [null, 0];
+
+  const pierna = [kn.x - an.x, kn.y - an.y];
+  const pie    = [fi.x - an.x, fi.y - an.y];
+
+  const lenPierna = Math.hypot(pierna[0], pierna[1]);
+  const lenPie    = Math.hypot(pie[0], pie[1]);
+
+  if (lenPierna < 0.02 || lenPie < 0.02) return [null, 0];
+
+  const ang = vecAngle(pierna, pie);
+
+  if (fi.y < an.y) {
+    const d = Math.min(ang, 30);
+    return d >= 25 ? ['dorsiflexion_tobillo', d] : [null, 0];
+  }
+
+  const p = Math.min(180 - ang, 60);
+  return p >= 25 ? ['flexion_plantar_tobillo', p] : [null, 0];
 }
 
 // estado
@@ -666,7 +687,8 @@ function onResults(res){
     for(const side of SIDES){
       const {sh,el,wr,hip,kn,an,fi}=map[side];
       const vs=Math.min(sh.visibility||0,el.visibility||0,wr.visibility||0);
-      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0);
+      const vi=Math.min(  hip.visibility||0,kn.visibility||0,an.visibility||0,fi.visibility||0);
+//      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0);
       if(vs>=VIS){
         const[exS,aS]=analyzeShoulder(sh,el,hip);updateJoint(side,'hombro',exS||'reposo',aS);
         const[exE,aE]=analyzeElbow(sh,el,wr);    updateJoint(side,'codo',  exE||'reposo',aE);
