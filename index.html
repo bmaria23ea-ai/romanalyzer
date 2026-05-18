@@ -472,53 +472,44 @@ const META={
   flexion_plantar_tobillo: {n:'Flex.Plantar', r:'inferior'},
 };
 
-// HOMBRO 2D
-// Referencia vertical hacia abajo desde el hombro para medir ángulo real del brazo
+// HOMBRO 2D — lógica original restaurada, solo se elimina el uso de Z
 function analyzeShoulder(sh,el,hip){
-  // Vector brazo (hombro → codo) y vector tronco (cadera → hombro)
+  // Ángulo del brazo respecto al tronco (hip→sh→el)
+  const ang=ang2(hip,sh,el);
+  // Ángulo de abducción: referencia vertical hacia abajo desde el hombro
+  const ref={x:sh.x,y:sh.y+0.3};
+  const abd=ang2(ref,sh,el);
+
+  // Detectar plano de movimiento en 2D
   const bx=el.x-sh.x, by=el.y-sh.y;
-  const tx=sh.x-hip.x, ty=sh.y-hip.y;
-
-  // Ángulo del brazo respecto al tronco (flexión/extensión en plano sagital)
-  const angTronco=vecAngle([bx,by],[tx,ty]);
-
-  // Ángulo del brazo respecto a vertical pura (para abducción en plano frontal)
-  const angVert=vecAngle([bx,by],[0,1]); // [0,1] = vector apuntando hacia abajo
+  const lenB=Math.hypot(bx,by)+1e-6;
+  const esSagital=Math.abs(by/lenB)>0.55;   // movimiento principalmente vertical
+  const esFrontal=Math.abs(bx/lenB)>0.55;   // movimiento principalmente horizontal
 
   // Codo arriba del hombro
-  const codoArriba=el.y<sh.y;
-  // Codo muy arriba (brazo casi vertical hacia arriba)
-  const codoBienArriba=el.y<sh.y-0.10;
-  // Codo a los lados (separación horizontal > vertical)
-  const codoLateral=Math.abs(bx)>Math.abs(by)*0.5;
+  const codoArriba=el.y<sh.y-0.01;
 
-  // ABDUCCIÓN: codo se mueve lateralmente o muy arriba
-  if(codoLateral||codoBienArriba){
-    // Ángulo de abducción = ángulo respecto a vertical
-    const abd=Math.min(angVert,180);
-    if(abd>THR) return ['abduccion_hombro',abd];
+  if(esSagital||(!esFrontal&&codoArriba)){
+    if(ang>THR&&codoArriba) return ['flexion_hombro',ang];
+    // Extensión: codo debajo y detrás — en 2D vista frontal es difícil detectar,
+    // se detecta como codo por debajo con separación horizontal pequeña
+    if(!codoArriba&&(el.y-sh.y)>0.02){
+      const ext=Math.max(0,Math.min(60,ang*0.6));
+      if(ext>THR) return ['extension_hombro',ext];
+    }
   }
-
-  // FLEXIÓN: codo sube por delante (en vista de lado) o directo hacia arriba
-  if(codoArriba){
-    const flex=Math.min(angTronco,180);
-    if(flex>THR) return ['flexion_hombro',flex];
+  if(esFrontal||Math.abs(bx/lenB)>0.45){
+    if(Math.abs(bx)>Math.abs(by)*0.45&&abd>THR) return ['abduccion_hombro',abd];
   }
-
-  // EXTENSIÓN: codo baja por detrás del tronco
-  if(!codoArriba&&angTronco>THR){
-    const ext=Math.max(0,Math.min(60,angTronco*0.5));
-    if(ext>THR) return ['extension_hombro',ext];
-  }
-
   return [null,0];
 }
 
 // CODO 2D — ángulo puro entre brazo y antebrazo
+// extension_codo solo cuando brazo casi recto (no en reposo natural)
 function analyzeElbow(sh,el,wr){
   const flex=Math.max(0,Math.min(150,180-ang2(sh,el,wr)));
   if(flex>THR) return ['flexion_codo',flex];
-  if(flex<8)   return ['extension_codo',0];
+  // No reportar extensión en reposo natural (brazo colgando)
   return [null,0];
 }
 
@@ -562,7 +553,8 @@ function analyzeKnee(hip,kn,an){
 
 // TOBILLO 2D — desviación respecto a postura neutra (90° pierna-pie)
 // Zona muerta amplia para evitar falsos positivos en postura estática
-function analyzeAnkle(kn,an,fi){
+// Recibe 'side' para manejar la dirección del pie izquierdo vs derecho
+function analyzeAnkle(kn,an,fi,side){
   if(!fi||(fi.visibility||0)<0.50) return [null,0];
 
   const pierna=[kn.x-an.x,kn.y-an.y];
@@ -574,24 +566,28 @@ function analyzeAnkle(kn,an,fi){
   // Landmarks demasiado juntos = no confiable
   if(lenPierna<0.04||lenPie<0.04) return [null,0];
 
-  // Bloquear solo si pierna casi horizontal (persona acostada, no aplica)
+  // Bloquear si pierna casi horizontal
   if(Math.abs(pierna[1])/lenPierna<0.30) return [null,0];
 
+  // El dedo del pie debe estar en la dirección correcta según el lado
+  // Derecho: fi.x debe estar a la izquierda del tobillo (en imagen espejo, fi.x < an.x)
+  // Izquierdo: fi.x debe estar a la derecha del tobillo (fi.x > an.x)
+  // Si el dedo está en dirección opuesta = landmark invertido/ruidoso, ignorar
+  const dirCorrecta = side==='derecho' ? (fi.x <= an.x+0.05) : (fi.x >= an.x-0.05);
+  if(!dirCorrecta) return [null,0];
+
   const ang=vecAngle(pierna,pie); // ≈90° en postura neutra de pie
-  const desv=ang-90; // negativo=dorsiflexión, positivo=flex plantar
+  const desv=ang-90;
 
-  // Zona muerta ±18° → no medir tobillo en postura estática ni rotaciones leves
-  if(Math.abs(desv)<18) return [null,0];
+  // Zona muerta ±20° — más amplia para absorber ruido de postura estática
+  if(Math.abs(desv)<20) return [null,0];
 
-  if(desv<-18){
-    // Dorsiflexión: punta del pie apunta hacia arriba
-    // Verificar que el dedo esté realmente más arriba que el tobillo
+  if(desv<-20){
     if(fi.y>=an.y) return [null,0];
     return ['dorsiflexion_tobillo',Math.min(Math.abs(desv),30)];
   }
 
-  // Flexión plantar: punta del pie apunta hacia abajo/adelante
-  // REQUIERE que el dedo esté más bajo que el tobillo en Y
+  // Flexión plantar: requiere que el dedo esté más bajo que el tobillo
   if(fi.y<=an.y) return [null,0];
   return ['flexion_plantar_tobillo',Math.min(desv,60)];
 }
@@ -741,7 +737,7 @@ function onResults(res){
       if(vi>=VIS){
         const[exH,aH]=analyzeHip(hip,kn,side);    updateJoint(side,'cadera', exH||'reposo',aH);
         const[exK,aK]=analyzeKnee(hip,kn,an);     updateJoint(side,'rodilla',exK||'reposo',aK);
-        const[exA,aA]=analyzeAnkle(kn,an,fi);     updateJoint(side,'tobillo',exA||'reposo',aA);
+        const[exA,aA]=analyzeAnkle(kn,an,fi,side);     updateJoint(side,'tobillo',exA||'reposo',aA);
       }else{updateJoint(side,'cadera','reposo',0);updateJoint(side,'rodilla','reposo',0);updateJoint(side,'tobillo','reposo',0);}
     }
     tick();renderAP();
