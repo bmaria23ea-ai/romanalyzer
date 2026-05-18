@@ -523,17 +523,20 @@ function analyzeElbow(sh,el,wr){
 }
 
 // CADERA 2D — usa referencia vertical y posición relativa rodilla/cadera
-function analyzeHip(sh,hip,kn,side){
+// NO usa el hombro como referencia (evita que mover el brazo afecte la cadera)
+function analyzeHip(hip,kn,side){
   // Flexión: rodilla sube por encima de la cadera
-  const refAbove={x:hip.x,y:hip.y-0.3}; // punto virtual encima de cadera
+  const refAbove={x:hip.x,y:hip.y-0.3}; // punto virtual encima de cadera (vertical pura)
   const flex=kn.y<hip.y-0.04?Math.min(ang2(refAbove,hip,kn),125):0;
 
-  // Extensión: rodilla detrás de la cadera usando tronco como referencia
-  // Solo si rodilla está debajo de cadera Y claramente detrás
+  // Vector vertical de referencia hacia arriba (tronco ideal, no el real)
+  const vertRef=[0,-1]; // apuntando hacia arriba
+  const leg=[kn.x-hip.x,kn.y-hip.y];
+  const va=vecAngle(vertRef,leg); // ángulo de la pierna respecto a vertical
+
+  // Extensión: rodilla detrás y debajo de cadera, con umbral estricto
   const knBehind=(kn.y>hip.y)&&(Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.4);
-  const trunk=[sh.x-hip.x,sh.y-hip.y],leg=[kn.x-hip.x,kn.y-hip.y];
-  const va=vecAngle(trunk,leg);
-  const ext=knBehind?Math.min(180-va,55):0;
+  const ext=knBehind?Math.min(va,55):0;
 
   // Abducción: rodilla se mueve lateralmente (piernas en V)
   let abd=0;
@@ -736,9 +739,9 @@ function onResults(res){
         const[exE,aE]=analyzeElbow(sh,el,wr);    updateJoint(side,'codo',  exE||'reposo',aE);
       }else{updateJoint(side,'hombro','reposo',0);updateJoint(side,'codo','reposo',0);}
       if(vi>=VIS){
-        const[exH,aH]=analyzeHip(sh,hip,kn,side);updateJoint(side,'cadera', exH||'reposo',aH);
-        const[exK,aK]=analyzeKnee(hip,kn,an);    updateJoint(side,'rodilla',exK||'reposo',aK);
-        const[exA,aA]=analyzeAnkle(kn,an,fi);    updateJoint(side,'tobillo',exA||'reposo',aA);
+        const[exH,aH]=analyzeHip(hip,kn,side);    updateJoint(side,'cadera', exH||'reposo',aH);
+        const[exK,aK]=analyzeKnee(hip,kn,an);     updateJoint(side,'rodilla',exK||'reposo',aK);
+        const[exA,aA]=analyzeAnkle(kn,an,fi);     updateJoint(side,'tobillo',exA||'reposo',aA);
       }else{updateJoint(side,'cadera','reposo',0);updateJoint(side,'rodilla','reposo',0);updateJoint(side,'tobillo','reposo',0);}
     }
     tick();renderAP();
