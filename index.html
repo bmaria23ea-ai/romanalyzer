@@ -431,7 +431,7 @@ tbody tr:last-child td { border-bottom:none; }
 'use strict';
 
 // ============================================================
-// FUNCIÓN DE ÁNGULO 2D (la única que necesitamos)
+// FUNCIÓN DE ÁNGULO 2D (única que necesitamos)
 // ============================================================
 function calcAngle(p1, p2, p3) {
     if (!p1 || !p2 || !p3) return 0;
@@ -452,7 +452,7 @@ function calcAngle(p1, p2, p3) {
 // ============================================================
 // CONSTANTES
 // ============================================================
-const THR = 18;  // Umbral mínimo para considerar movimiento (subido de 12 a 18)
+const THR = 18;  // Umbral mínimo para considerar movimiento
 const VIS = 0.50; // Visibilidad mínima requerida
 
 const META = {
@@ -480,13 +480,13 @@ const COLS = { hombro:'var(--blue)', codo:'var(--cyan)', cadera:'var(--orange)',
 // ESTABILIZADOR DE ÁNGULOS (evita cambios bruscos por ruido)
 // ============================================================
 let lastValidAngles = {
-    derecho: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0 },
-    izquierdo: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0 }
+    derecho: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0, hombro_ext: 0, cadera_ext: 0 },
+    izquierdo: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0, hombro_ext: 0, cadera_ext: 0 }
 };
 const MAX_CHANGE_PER_FRAME = 15;
 
 function stableAngle(side, joint, newAngle) {
-    const last = lastValidAngles[side][joint];
+    const last = lastValidAngles[side][joint] || 0;
     if (Math.abs(newAngle - last) > MAX_CHANGE_PER_FRAME && last > 0) {
         return last;
     }
@@ -495,27 +495,50 @@ function stableAngle(side, joint, newAngle) {
 }
 
 // ============================================================
-// FUNCIONES DE ANÁLISIS POR ARTICULACIÓN (TODAS EN 2D)
+// DETECTOR DE MOVIMIENTO ACTIVO
+// ============================================================
+let lastPositions = {
+    derecho: { hombro: { y: 0 }, codo: { y: 0 }, cadera: { y: 0 }, rodilla: { y: 0 } },
+    izquierdo: { hombro: { y: 0 }, codo: { y: 0 }, cadera: { y: 0 }, rodilla: { y: 0 } }
+};
+
+function isMoving(side, joint, currentY, threshold = 0.012) {
+    const last = lastPositions[side][joint]?.y || currentY;
+    const movement = Math.abs(currentY - last);
+    lastPositions[side][joint] = { y: currentY };
+    return movement > threshold;
+}
+
+// ============================================================
+// FUNCIONES DE ANÁLISIS POR ARTICULACIÓN (TODAS CORREGIDAS)
 // ============================================================
 
-function analyzeShoulder(sh, el, hip) {
+function analyzeShoulder(sh, el, hip, side) {
     if (!sh || !el || (sh.visibility || 0) < VIS || (el.visibility || 0) < VIS) {
         return [null, 0];
     }
     
     const angulo = calcAngle(hip, sh, el);
     
-    // Flexión: codo más alto que hombro
+    // Detectar movimiento activo
+    const moving = isMoving(side, 'codo', el.y);
+    
+    // FLEXIÓN: Brazo hacia arriba (codo más alto que hombro)
     if (el.y < sh.y - 0.03 && angulo > THR) {
         return ['flexion_hombro', Math.min(angulo, 170)];
     }
     
-    // Extensión: codo más bajo que hombro
-    if (el.y > sh.y + 0.02 && angulo > THR - 5) {
-        return ['extension_hombro', Math.min(angulo, 50)];
+    // EXTENSIÓN: Brazo hacia atrás (solo si hay movimiento activo)
+    // Condición: el codo no está extremadamente bajo y hay movimiento
+    const notResting = Math.abs(el.y - sh.y) < 0.10;
+    if (notResting && moving && angulo > THR - 8 && angulo < 70) {
+        const extensionValue = Math.min(angulo, 50);
+        if (extensionValue > 12) {
+            return ['extension_hombro', extensionValue];
+        }
     }
     
-    // Abducción: separación lateral significativa
+    // ABDUCCIÓN: Separación lateral significativa
     const lateralSep = Math.abs(el.x - sh.x);
     if (lateralSep > 0.08 && angulo > THR) {
         return ['abduccion_hombro', Math.min(angulo, 170)];
@@ -532,8 +555,14 @@ function analyzeElbow(sh, el, wr) {
     const angulo = calcAngle(sh, el, wr);
     const flexion = 180 - angulo;
     
+    // Flexión de codo
     if (flexion > THR && flexion < 160) {
         return ['flexion_codo', flexion];
+    }
+    
+    // Extensión de codo (ángulo cercano a 180 grados)
+    if (angulo > 165 && angulo < 180) {
+        return ['extension_codo', 0];
     }
     
     return [null, 0];
@@ -547,22 +576,30 @@ function analyzeHip(sh, hip, kn, side) {
     
     const angulo = calcAngle(sh, hip, kn);
     
-    // Flexión: rodilla más alta que cadera
-    if (kn.y < hip.y - 0.03 && angulo > THR) {
+    // Detectar movimiento activo en la rodilla (para extensión)
+    const movingKnee = isMoving(side, 'rodilla', kn.y);
+    
+    // FLEXIÓN DE CADERA: Subir la pierna (rodilla más alta que cadera)
+    if (kn.y < hip.y - 0.03 && angulo > THR && angulo < 140) {
         return ['flexion_cadera', Math.min(angulo, 120)];
     }
     
-    // Extensión: rodilla más baja que cadera
-    if (kn.y > hip.y + 0.02 && angulo > THR - 5) {
-        return ['extension_cadera', Math.min(angulo, 30)];
+    // EXTENSIÓN DE CADERA: Hiperextensión real (pierna detrás del cuerpo)
+    // Solo detectar si hay movimiento activo y la pierna está detrás
+    const isBehind = kn.x < hip.x - 0.04; // Rodilla detrás de la cadera
+    if (movingKnee && isBehind && angulo > THR - 8 && angulo < 40) {
+        const extensionValue = Math.min(angulo, 30);
+        if (extensionValue > 10) {
+            return ['extension_cadera', extensionValue];
+        }
     }
     
-    // Abducción: separación lateral
+    // ABDUCCIÓN DE CADERA: Separación lateral
     let lateralSep = 0;
     if (side === 'derecho') lateralSep = hip.x - kn.x;
     else lateralSep = kn.x - hip.x;
     
-    if (lateralSep > 0.05 && angulo > THR) {
+    if (lateralSep > 0.06 && angulo > THR) {
         return ['abduccion_cadera', Math.min(angulo, 50)];
     }
     
@@ -578,8 +615,14 @@ function analyzeKnee(hip, kn, an) {
     const angulo = calcAngle(hip, kn, an);
     const flexion = 180 - angulo;
     
+    // Flexión de rodilla
     if (flexion > THR && flexion < 160) {
         return ['flexion_rodilla', flexion];
+    }
+    
+    // Extensión de rodilla (pierna estirada)
+    if (angulo > 165 && angulo < 180) {
+        return ['extension_rodilla', 0];
     }
     
     return [null, 0];
@@ -593,22 +636,18 @@ function analyzeAnkle(kn, an, fi) {
     
     const angulo = calcAngle(kn, an, fi);
     
-    // En posición neutra: ~70-100 grados entre pierna y pie
     // Dorsiflexión (punta hacia arriba): ángulo > 95 grados
-    // Flexión plantar (punta hacia abajo): ángulo < 75 grados
-    
-    // Dorsiflexión
     if (angulo > 95 && angulo < 130) {
         const dorsi = angulo - 90;
-        if (dorsi > 12) {  // Umbral más alto
+        if (dorsi > 12) {
             return ['dorsiflexion_tobillo', Math.min(dorsi, 30)];
         }
     }
     
-    // Flexión plantar
+    // Flexión plantar (punta hacia abajo): ángulo < 75 grados
     if (angulo < 75 && angulo > 40) {
         const plantar = 90 - angulo;
-        if (plantar > 12) {  // Umbral más alto
+        if (plantar > 12) {
             return ['flexion_plantar_tobillo', Math.min(plantar, 45)];
         }
     }
@@ -652,7 +691,7 @@ function smoothAngle(buf, val, maxLen = 5, clip = 15) {
 function updateJoint(side, joint, ex, angle) {
     const d = jData[side][joint];
     
-    // Aplicar filtro de estabilidad para todas las articulaciones
+    // Aplicar filtro de estabilidad
     angle = stableAngle(side, joint, angle);
     
     d.exercise = ex;
@@ -687,7 +726,7 @@ function tick() {
             if (d.exercise !== 'reposo' && d.angle > MIN_VALID_ANGLE) {
                 const m = META[d.exercise];
                 
-                // Evitar duplicados idénticos en rápida sucesión
+                // Evitar duplicados idénticos
                 const lastReg = registro[registro.length - 1];
                 if (!lastReg || 
                     lastReg.ejercicio !== d.exercise || 
@@ -823,10 +862,14 @@ function resetSession() {
     movs = mkMovs();
     sesStart = null;
     ticks = 0;
-    // Resetear también el estabilizador de ángulos
+    // Resetear estabilizador y detector de movimiento
     lastValidAngles = {
-        derecho: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0 },
-        izquierdo: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0 }
+        derecho: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0, hombro_ext: 0, cadera_ext: 0 },
+        izquierdo: { tobillo: 0, rodilla: 0, cadera: 0, hombro: 0, codo: 0, hombro_ext: 0, cadera_ext: 0 }
+    };
+    lastPositions = {
+        derecho: { hombro: { y: 0 }, codo: { y: 0 }, cadera: { y: 0 }, rodilla: { y: 0 } },
+        izquierdo: { hombro: { y: 0 }, codo: { y: 0 }, cadera: { y: 0 }, rodilla: { y: 0 } }
     };
     toast('🔄 Reset completo');
 }
@@ -920,7 +963,7 @@ function onResults(res) {
             
             // Tren superior
             if (vs >= VIS) {
-                const [exS, aS] = analyzeShoulder(sh, el, hip);
+                const [exS, aS] = analyzeShoulder(sh, el, hip, side);
                 updateJoint(side, 'hombro', exS || 'reposo', aS);
                 const [exE, aE] = analyzeElbow(sh, el, wr);
                 updateJoint(side, 'codo', exE || 'reposo', aE);
@@ -978,7 +1021,7 @@ async function startCam(mode) {
     if (mode) facingMode = mode;
     let stream = null;
     for (const c of [
-        { video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } } },
+        { video: { facingMode: facingMode, width: { ideal: 854 }, height: { ideal: 480 } } },
         { video: true }
     ]) {
         try {
