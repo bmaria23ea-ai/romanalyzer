@@ -430,7 +430,7 @@ tbody tr:last-child td { border-bottom:none; }
 <script>
 'use strict';
 
-//operaciones matemáticas
+//operaciones matemáticas — TODO EN PURO 2D, z ignorado completamente
 const DEG=r=>r*180/Math.PI;
 function vNorm(v){ return Math.sqrt(v.reduce((s,x)=>s+x*x,0)); }
 function vDot(a,b){ return a.reduce((s,x,i)=>s+x*b[i],0); }
@@ -439,20 +439,15 @@ function vecAngle(v1,v2){
   if(n1<1e-6||n2<1e-6) return 0;
   return DEG(Math.acos(Math.max(-1,Math.min(1,vDot(v1,v2)/(n1*n2)))));
 }
-function angle3d(p1,p2,p3,z=true){
-  const ba=z?[p1.x-p2.x,p1.y-p2.y,p1.z-p2.z]:[p1.x-p2.x,p1.y-p2.y];
-  const bc=z?[p3.x-p2.x,p3.y-p2.y,p3.z-p2.z]:[p3.x-p2.x,p3.y-p2.y];
-  return vecAngle(ba,bc);
-}
-function angle2d(p1,p2,p3){
+// Único helper de ángulo: siempre 2D
+function ang2(p1,p2,p3){
   return vecAngle([p1.x-p2.x,p1.y-p2.y],[p3.x-p2.x,p3.y-p2.y]);
 }
-function smoothAngle(buf,val,maxLen=6,clip=18){
-  // Rechazar solo picos imposibles (>70°) cuando el buffer ya está estable y lleno
-  // No rechazar en movimientos rápidos reales (brazos subiendo, sentadillas)
+function smoothAngle(buf,val,maxLen=6,clip=20){
+  // Rechazar solo picos imposibles cuando buffer lleno y estable
   if(buf.length>=maxLen){
     const avg=buf.reduce((s,v)=>s+v,0)/buf.length;
-    if(Math.abs(val-avg)>70) return avg; // solo rechaza spikes físicamente imposibles
+    if(Math.abs(val-avg)>70) return avg;
   }
   if(buf.length>0) val=Math.max(buf[buf.length-1]-clip,Math.min(buf[buf.length-1]+clip,val));
   buf.push(val);
@@ -460,7 +455,7 @@ function smoothAngle(buf,val,maxLen=6,clip=18){
   return buf.reduce((s,v)=>s+v,0)/buf.length;
 }
 
-// análisis
+// ── ANÁLISIS 2D ────────────────────────────────────────────────────────────
 const THR=12, VIS=0.50;
 const META={
   flexion_hombro:          {n:'Flexión',      r:'superior'},
@@ -476,73 +471,96 @@ const META={
   dorsiflexion_tobillo:    {n:'Dorsiflexión', r:'inferior'},
   flexion_plantar_tobillo: {n:'Flex.Plantar', r:'inferior'},
 };
-function detectPlane(sh,el){
-  let vx=el.x-sh.x,vy=el.y-sh.y,vz=(el.z||0)-(sh.z||0);
-  const n=Math.sqrt(vx*vx+vy*vy+vz*vz)+1e-6;
-  if(Math.abs(vy/n)>0.55) return 'sagital';
-  if(Math.abs(vx/n)>0.55) return 'frontal';
-  return 'mixto';
-}
+
+// HOMBRO 2D
+// Referencia vertical hacia abajo desde el hombro para medir ángulo real del brazo
 function analyzeShoulder(sh,el,hip){
-  const ang=angle3d(hip,sh,el,true);
-  const ref={x:sh.x,y:sh.y+0.3,z:sh.z||0};
-  const abd=angle3d(ref,sh,el,false);
-  const behind=(el.z-sh.z)>0.06;
-  const plane=detectPlane(sh,el);
+  // Vector brazo (hombro → codo) y vector tronco (cadera → hombro)
+  const bx=el.x-sh.x, by=el.y-sh.y;
+  const tx=sh.x-hip.x, ty=sh.y-hip.y;
 
-  // Brazo claramente arriba (codo sobre el hombro) → flexión o abducción alta
-  const elbowAbove=el.y<sh.y-0.02;
-  const elbowFarAbove=el.y<sh.y-0.15; // bien arriba de la cabeza
+  // Ángulo del brazo respecto al tronco (flexión/extensión en plano sagital)
+  const angTronco=vecAngle([bx,by],[tx,ty]);
 
-  if(plane==='sagital'||plane==='mixto'){
-    if(ang>THR&&elbowAbove) return ['flexion_hombro',ang];
-    if(behind&&(el.y-sh.y)>0.02){
-      const ext=Math.max(0,Math.min(60,ang*0.6));
-      if(ext>THR) return ['extension_hombro',ext];
-    }
+  // Ángulo del brazo respecto a vertical pura (para abducción en plano frontal)
+  const angVert=vecAngle([bx,by],[0,1]); // [0,1] = vector apuntando hacia abajo
+
+  // Codo arriba del hombro
+  const codoArriba=el.y<sh.y;
+  // Codo muy arriba (brazo casi vertical hacia arriba)
+  const codoBienArriba=el.y<sh.y-0.10;
+  // Codo a los lados (separación horizontal > vertical)
+  const codoLateral=Math.abs(bx)>Math.abs(by)*0.5;
+
+  // ABDUCCIÓN: codo se mueve lateralmente o muy arriba
+  if(codoLateral||codoBienArriba){
+    // Ángulo de abducción = ángulo respecto a vertical
+    const abd=Math.min(angVert,180);
+    if(abd>THR) return ['abduccion_hombro',abd];
   }
-  if(plane==='frontal'||plane==='mixto'||elbowFarAbove){
-    // Abducción: codo se separa lateralmente O está muy arriba (abducción total >120°)
-    const sepLateral=Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.35;
-    if((sepLateral||elbowFarAbove)&&abd>THR) return ['abduccion_hombro',abd];
+
+  // FLEXIÓN: codo sube por delante (en vista de lado) o directo hacia arriba
+  if(codoArriba){
+    const flex=Math.min(angTronco,180);
+    if(flex>THR) return ['flexion_hombro',flex];
   }
+
+  // EXTENSIÓN: codo baja por detrás del tronco
+  if(!codoArriba&&angTronco>THR){
+    const ext=Math.max(0,Math.min(60,angTronco*0.5));
+    if(ext>THR) return ['extension_hombro',ext];
+  }
+
   return [null,0];
 }
+
+// CODO 2D — ángulo puro entre brazo y antebrazo
 function analyzeElbow(sh,el,wr){
-  const flex=Math.max(0,Math.min(150,180-angle3d(sh,el,wr,true)));
+  const flex=Math.max(0,Math.min(150,180-ang2(sh,el,wr)));
   if(flex>THR) return ['flexion_codo',flex];
   if(flex<8)   return ['extension_codo',0];
   return [null,0];
 }
+
+// CADERA 2D — usa referencia vertical y posición relativa rodilla/cadera
 function analyzeHip(sh,hip,kn,side){
-  const ref={x:hip.x,y:hip.y-0.2};
-  const flex=kn.y<hip.y-0.05?Math.min(angle2d(ref,hip,kn),125):0;
-  // Umbral más estricto para extension (0.4 en vez de 0.2) — evita falsos positivos por inclinación de tronco
+  // Flexión: rodilla sube por encima de la cadera
+  const refAbove={x:hip.x,y:hip.y-0.3}; // punto virtual encima de cadera
+  const flex=kn.y<hip.y-0.04?Math.min(ang2(refAbove,hip,kn),125):0;
+
+  // Extensión: rodilla detrás de la cadera usando tronco como referencia
+  // Solo si rodilla está debajo de cadera Y claramente detrás
+  const knBehind=(kn.y>hip.y)&&(Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.4);
   const trunk=[sh.x-hip.x,sh.y-hip.y],leg=[kn.x-hip.x,kn.y-hip.y];
   const va=vecAngle(trunk,leg);
-  const ext=(kn.y>hip.y&&Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.4)?Math.min(180-va,60):0;
+  const ext=knBehind?Math.min(180-va,55):0;
+
+  // Abducción: rodilla se mueve lateralmente (piernas en V)
   let abd=0;
-  if(Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.5){
-    if(side==='derecho'&&kn.x<hip.x) abd=va;
+  const knLateral=Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.55;
+  if(knLateral){
+    if(side==='derecho'&&kn.x<hip.x)   abd=va;
     if(side==='izquierdo'&&kn.x>hip.x) abd=va;
   }
+
   if(flex>THR&&flex>abd&&flex>ext) return ['flexion_cadera',flex];
   if(ext>THR&&ext>abd)             return ['extension_cadera',ext];
   if(abd>THR)                      return ['abduccion_cadera',abd];
   return [null,0];
 }
+
+// RODILLA 2D — ángulo muslo/pierna, puro 2D con umbral conservador
 function analyzeKnee(hip,kn,an){
-  // 3D para evitar artefactos de proyección cuando la persona se inclina
-  const ul=[hip.x-kn.x,hip.y-kn.y,(hip.z||0)-(kn.z||0)];
-  const ll=[an.x-kn.x,  an.y-kn.y, (an.z||0)-(kn.z||0)];
-  const ang=vecAngle(ul,ll);
+  const ang=ang2(hip,kn,an);
   const flex=Math.max(0,Math.min(150,180-ang));
-  // Umbral 15° (antes 10°) para evitar ruido de pose estática
   if(flex>15) return ['flexion_rodilla',flex];
   return ['extension_rodilla',0];
 }
+
+// TOBILLO 2D — desviación respecto a postura neutra (90° pierna-pie)
+// Zona muerta amplia para evitar falsos positivos en postura estática
 function analyzeAnkle(kn,an,fi){
-  if(!fi||(fi.visibility||0)<0.55) return [null,0];
+  if(!fi||(fi.visibility||0)<0.50) return [null,0];
 
   const pierna=[kn.x-an.x,kn.y-an.y];
   const pie   =[fi.x-an.x,fi.y-an.y];
@@ -553,33 +571,26 @@ function analyzeAnkle(kn,an,fi){
   // Landmarks demasiado juntos = no confiable
   if(lenPierna<0.04||lenPie<0.04) return [null,0];
 
-  // En sentadilla la pierna puede inclinarse; solo exigir que no sea casi horizontal
-  const piernaNormY=Math.abs(pierna[1])/lenPierna;
-  if(piernaNormY<0.35) return [null,0]; // solo bloquear si pierna es casi horizontal
+  // Bloquear solo si pierna casi horizontal (persona acostada, no aplica)
+  if(Math.abs(pierna[1])/lenPierna<0.30) return [null,0];
 
-  // Ángulo entre pierna y pie
-  const ang=vecAngle(pierna,pie);
-
-  // En postura anatómica de pie, ang ≈ 90° (pierna vertical, pie horizontal)
-  // Dorsiflexión: punta del pie sube (fi.y < an.y) Y ángulo < 90°
-  // Flexión plantar: punta baja más (fi.y > an.y) Y ángulo > 90°
-
-  // Calcular desviación respecto a 90° (postura neutra)
+  const ang=vecAngle(pierna,pie); // ≈90° en postura neutra de pie
   const desv=ang-90; // negativo=dorsiflexión, positivo=flex plantar
 
-  // Zona muerta: ±15° alrededor de neutro para evitar ruido en postura estática
-  if(Math.abs(desv)<15) return [null,0];
+  // Zona muerta ±18° → no medir tobillo en postura estática ni rotaciones leves
+  if(Math.abs(desv)<18) return [null,0];
 
-  if(desv<-15){
-    // Dorsiflexión real: pie apunta hacia arriba
-    const d=Math.min(Math.abs(desv),30);
-    return ['dorsiflexion_tobillo',d];
+  if(desv<-18){
+    // Dorsiflexión: punta del pie apunta hacia arriba
+    // Verificar que el dedo esté realmente más arriba que el tobillo
+    if(fi.y>=an.y) return [null,0];
+    return ['dorsiflexion_tobillo',Math.min(Math.abs(desv),30)];
   }
-  // Flexión plantar: pie apunta hacia abajo/adelante
-  // Solo reportar si el dedo realmente está más abajo que el tobillo
-  if(fi.y<=an.y) return [null,0]; // si dedo está arriba, no es flex plantar
-  const p=Math.min(desv,60);
-  return p>=15?['flexion_plantar_tobillo',p]:[null,0];
+
+  // Flexión plantar: punta del pie apunta hacia abajo/adelante
+  // REQUIERE que el dedo esté más bajo que el tobillo en Y
+  if(fi.y<=an.y) return [null,0];
+  return ['flexion_plantar_tobillo',Math.min(desv,60)];
 }
 
 // estado
