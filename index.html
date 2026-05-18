@@ -447,11 +447,12 @@ function angle3d(p1,p2,p3,z=true){
 function angle2d(p1,p2,p3){
   return vecAngle([p1.x-p2.x,p1.y-p2.y],[p3.x-p2.x,p3.y-p2.y]);
 }
-function smoothAngle(buf,val,maxLen=6,clip=12){
-  // Rechazar outliers extremos: si el valor se aleja >35° del promedio actual, ignorarlo
-  if(buf.length>=2){
+function smoothAngle(buf,val,maxLen=6,clip=18){
+  // Rechazar solo picos imposibles (>70°) cuando el buffer ya está estable y lleno
+  // No rechazar en movimientos rápidos reales (brazos subiendo, sentadillas)
+  if(buf.length>=maxLen){
     const avg=buf.reduce((s,v)=>s+v,0)/buf.length;
-    if(Math.abs(val-avg)>35) return avg;
+    if(Math.abs(val-avg)>70) return avg; // solo rechaza spikes físicamente imposibles
   }
   if(buf.length>0) val=Math.max(buf[buf.length-1]-clip,Math.min(buf[buf.length-1]+clip,val));
   buf.push(val);
@@ -484,19 +485,26 @@ function detectPlane(sh,el){
 }
 function analyzeShoulder(sh,el,hip){
   const ang=angle3d(hip,sh,el,true);
-  const ref={x:sh.x,y:sh.y+0.3,z:sh.z};
+  const ref={x:sh.x,y:sh.y+0.3,z:sh.z||0};
   const abd=angle3d(ref,sh,el,false);
   const behind=(el.z-sh.z)>0.06;
   const plane=detectPlane(sh,el);
+
+  // Brazo claramente arriba (codo sobre el hombro) → flexión o abducción alta
+  const elbowAbove=el.y<sh.y-0.02;
+  const elbowFarAbove=el.y<sh.y-0.15; // bien arriba de la cabeza
+
   if(plane==='sagital'||plane==='mixto'){
-    if(ang>THR&&el.y<sh.y-0.01) return ['flexion_hombro',ang];
+    if(ang>THR&&elbowAbove) return ['flexion_hombro',ang];
     if(behind&&(el.y-sh.y)>0.02){
       const ext=Math.max(0,Math.min(60,ang*0.6));
       if(ext>THR) return ['extension_hombro',ext];
     }
   }
-  if(plane==='frontal'||plane==='mixto'){
-    if(Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.45&&abd>THR) return ['abduccion_hombro',abd];
+  if(plane==='frontal'||plane==='mixto'||elbowFarAbove){
+    // Abducción: codo se separa lateralmente O está muy arriba (abducción total >120°)
+    const sepLateral=Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.35;
+    if((sepLateral||elbowFarAbove)&&abd>THR) return ['abduccion_hombro',abd];
   }
   return [null,0];
 }
@@ -534,7 +542,7 @@ function analyzeKnee(hip,kn,an){
   return ['extension_rodilla',0];
 }
 function analyzeAnkle(kn,an,fi){
-  if(!fi||(fi.visibility||0)<0.60) return [null,0];
+  if(!fi||(fi.visibility||0)<0.55) return [null,0];
 
   const pierna=[kn.x-an.x,kn.y-an.y];
   const pie   =[fi.x-an.x,fi.y-an.y];
@@ -542,21 +550,36 @@ function analyzeAnkle(kn,an,fi){
   const lenPierna=Math.hypot(pierna[0],pierna[1]);
   const lenPie   =Math.hypot(pie[0],pie[1]);
 
-  if(lenPierna<0.03||lenPie<0.03) return [null,0];
+  // Landmarks demasiado juntos = no confiable
+  if(lenPierna<0.04||lenPie<0.04) return [null,0];
 
-  // NUEVA GUARDA: la pierna debe ser dominantemente vertical (>60% en Y)
-  // Evita medir tobillo cuando la persona se inclina o está en posición atípica
+  // En sentadilla la pierna puede inclinarse; solo exigir que no sea casi horizontal
   const piernaNormY=Math.abs(pierna[1])/lenPierna;
-  if(piernaNormY<0.60) return [null,0];
+  if(piernaNormY<0.35) return [null,0]; // solo bloquear si pierna es casi horizontal
 
+  // Ángulo entre pierna y pie
   const ang=vecAngle(pierna,pie);
 
-  if(fi.y<an.y){
-    const d=Math.min(ang,30);
-    return d>=20?['dorsiflexion_tobillo',d]:[null,0];
+  // En postura anatómica de pie, ang ≈ 90° (pierna vertical, pie horizontal)
+  // Dorsiflexión: punta del pie sube (fi.y < an.y) Y ángulo < 90°
+  // Flexión plantar: punta baja más (fi.y > an.y) Y ángulo > 90°
+
+  // Calcular desviación respecto a 90° (postura neutra)
+  const desv=ang-90; // negativo=dorsiflexión, positivo=flex plantar
+
+  // Zona muerta: ±15° alrededor de neutro para evitar ruido en postura estática
+  if(Math.abs(desv)<15) return [null,0];
+
+  if(desv<-15){
+    // Dorsiflexión real: pie apunta hacia arriba
+    const d=Math.min(Math.abs(desv),30);
+    return ['dorsiflexion_tobillo',d];
   }
-  const p=Math.min(180-ang,60);
-  return p>=20?['flexion_plantar_tobillo',p]:[null,0];
+  // Flexión plantar: pie apunta hacia abajo/adelante
+  // Solo reportar si el dedo realmente está más abajo que el tobillo
+  if(fi.y<=an.y) return [null,0]; // si dedo está arriba, no es flex plantar
+  const p=Math.min(desv,60);
+  return p>=15?['flexion_plantar_tobillo',p]:[null,0];
 }
 
 // estado
