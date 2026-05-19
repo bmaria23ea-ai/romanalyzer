@@ -478,7 +478,7 @@ function analyzeShoulder(sh,el,hip){
   const abd=angle2d(ref,sh,el);
   if(ang>THR&&el.y<sh.y-0.01) return ['flexion_hombro',ang];
   if(el.y>sh.y+0.02){
-    const ext=Math.max(0,Math.min(45,ang));
+    const ext=Math.max(0,Math.min(45,ang*0.6));
     if(ext>THR) return ['extension_hombro',ext];
   }
   if(Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.45&&abd>THR) return ['abduccion_hombro',abd];
