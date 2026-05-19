@@ -430,361 +430,404 @@ tbody tr:last-child td { border-bottom:none; }
 <script>
 'use strict';
 
-//operaciones matemáticas
-const DEG=r=>r*180/Math.PI;
-function vNorm(v){ return Math.sqrt(v.reduce((s,x)=>s+x*x,0)); }
-function vDot(a,b){ return a.reduce((s,x,i)=>s+x*b[i],0); }
-function vecAngle(v1,v2){
-  const n1=vNorm(v1),n2=vNorm(v2);
-  if(n1<1e-6||n2<1e-6) return 0;
-  return DEG(Math.acos(Math.max(-1,Math.min(1,vDot(v1,v2)/(n1*n2)))));
+// ─── MATEMÁTICAS ─────────────────────────────────────────────────────────────
+const DEG = r => r * 180 / Math.PI;
+function vNorm(v){ return Math.sqrt(v.reduce((s,x) => s + x*x, 0)); }
+function vDot(a,b){ return a.reduce((s,x,i) => s + x*b[i], 0); }
+function vecAngle(v1, v2){
+  const n1 = vNorm(v1), n2 = vNorm(v2);
+  if(n1 < 1e-6 || n2 < 1e-6) return 0;
+  return DEG(Math.acos(Math.max(-1, Math.min(1, vDot(v1,v2) / (n1*n2)))));
 }
-function angle3d(p1,p2,p3,z=true){
-  const ba=z?[p1.x-p2.x,p1.y-p2.y,p1.z-p2.z]:[p1.x-p2.x,p1.y-p2.y];
-  const bc=z?[p3.x-p2.x,p3.y-p2.y,p3.z-p2.z]:[p3.x-p2.x,p3.y-p2.y];
-  return vecAngle(ba,bc);
+function angle2d(p1, p2, p3){
+  return vecAngle([p1.x-p2.x, p1.y-p2.y], [p3.x-p2.x, p3.y-p2.y]);
 }
-function angle2d(p1,p2,p3){
-  return vecAngle([p1.x-p2.x,p1.y-p2.y],[p3.x-p2.x,p3.y-p2.y]);
-}
-function smoothAngle(buf,val,maxLen=5,clip=15){
-  if(buf.length>0) val=Math.max(buf[buf.length-1]-clip,Math.min(buf[buf.length-1]+clip,val));
+function smoothAngle(buf, val, maxLen=5, clip=15){
+  if(buf.length > 0) val = Math.max(buf[buf.length-1]-clip, Math.min(buf[buf.length-1]+clip, val));
   buf.push(val);
-  if(buf.length>maxLen) buf.shift();
-  return buf.reduce((s,v)=>s+v,0)/buf.length;
+  if(buf.length > maxLen) buf.shift();
+  return buf.reduce((s,v) => s+v, 0) / buf.length;
 }
 
-// análisis
-const THR=12, VIS=0.50;
-const META={
-  flexion_hombro:          {n:'Flexión',      r:'superior'},
-  extension_hombro:        {n:'Extensión',    r:'superior'},
-  abduccion_hombro:        {n:'Abducción',    r:'superior'},
-  flexion_codo:            {n:'Flexión',      r:'superior'},
-  extension_codo:          {n:'Extensión',    r:'superior'},
-  flexion_cadera:          {n:'Flexión',      r:'inferior'},
-  extension_cadera:        {n:'Extensión',    r:'inferior'},
-  abduccion_cadera:        {n:'Abducción',    r:'inferior'},
-  flexion_rodilla:         {n:'Flexión',      r:'inferior'},
-  extension_rodilla:       {n:'Extensión',    r:'inferior'},
-  dorsiflexion_tobillo:    {n:'Dorsiflexión', r:'inferior'},
-  flexion_plantar_tobillo: {n:'Flex.Plantar', r:'inferior'},
+// ─── ANÁLISIS DE ARTICULACIONES ──────────────────────────────────────────────
+const THR = 12, VIS = 0.50;
+const META = {
+  flexion_hombro:          { n:'Flexión',      r:'superior' },
+  extension_hombro:        { n:'Extensión',    r:'superior' },
+  abduccion_hombro:        { n:'Abducción',    r:'superior' },
+  flexion_codo:            { n:'Flexión',      r:'superior' },
+  extension_codo:          { n:'Extensión',    r:'superior' },
+  flexion_cadera:          { n:'Flexión',      r:'inferior' },
+  extension_cadera:        { n:'Extensión',    r:'inferior' },
+  abduccion_cadera:        { n:'Abducción',    r:'inferior' },
+  flexion_rodilla:         { n:'Flexión',      r:'inferior' },
+  extension_rodilla:       { n:'Extensión',    r:'inferior' },
+  dorsiflexion_tobillo:    { n:'Dorsiflexión', r:'inferior' },
+  flexion_plantar_tobillo: { n:'Flex.Plantar', r:'inferior' },
 };
-// Hombro 2D: usa solo X e Y (sin Z ni detectPlane)
-// Flexion: codo sube sobre hombro | Extension: codo baja | Abduccion: codo se aleja lateral
-function analyzeShoulder(sh,el,hip){
-  const ang=angle2d(hip,sh,el);
-  const ref={x:sh.x,y:sh.y+0.3};
-  const abd=angle2d(ref,sh,el);
-  if(ang>THR&&el.y<sh.y-0.01) return ['flexion_hombro',ang];
-  if(el.y>sh.y+0.02){
-    const ext=Math.max(0,Math.min(45,ang));
-    if(ext>THR) return ['extension_hombro',ext];
+
+function analyzeShoulder(sh, el, hip){
+  const ang = angle2d(hip, sh, el);
+  const ref = { x:sh.x, y:sh.y+0.3 };
+  const abd = angle2d(ref, sh, el);
+  if(ang > THR && el.y < sh.y-0.01) return ['flexion_hombro', ang];
+  if(el.y > sh.y+0.02){
+    const ext = Math.max(0, Math.min(45, ang));
+    if(ext > THR) return ['extension_hombro', ext];
   }
-  if(Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.45&&abd>THR) return ['abduccion_hombro',abd];
-  return [null,0];
-}
-// Codo 2D: flex = 180 - angulo hombro->codo->muneca en plano XY
-function analyzeElbow(sh,el,wr){
-  const flex=Math.max(0,Math.min(145,180-angle2d(sh,el,wr)));
-  if(flex>THR) return ['flexion_codo',flex];
-  if(flex<8)   return ['extension_codo',0];
-  return [null,0];
-}
-// Cadera: referencia de tronco corregida
-// En lugar de usar el punto hombro como extremo de un vector fijo,
-// se construye el vector tronco real (cadera→hombro) normalizado,
-// lo que es correcto aunque el torso esté inclinado (sentadilla, peso frontal)
-function analyzeHip(sh,hip,kn,side){
-  // Vector tronco: desde cadera hacia hombro (dirección real del segmento)
-  const trunk=[sh.x-hip.x,sh.y-hip.y];
-  const leg  =[kn.x-hip.x,kn.y-hip.y];
-
-  // Flexión: rodilla sube por encima de la cadera → ángulo entre tronco y pierna
-  const va=vecAngle(trunk,leg);
-  const flex=kn.y<hip.y-0.05?Math.min(va,125):0;
-
-  // Extensión: rodilla por debajo y algo lateral → complemento del ángulo tronco-pierna
-  const ext=(kn.y>hip.y&&Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.2)?Math.min(180-va,20):0;
-
-  // Abducción: desplazamiento lateral del knee respecto a la cadera (máx clínico 45°)
-  let abd=0;
-  if(Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.5){
-    if(side==='derecho'  &&kn.x<hip.x) abd=Math.min(va,45);
-    if(side==='izquierdo'&&kn.x>hip.x) abd=Math.min(va,45);
-  }
-
-  if(flex>THR&&flex>abd&&flex>ext) return ['flexion_cadera',flex];
-  if(ext>THR&&ext>abd)             return ['extension_cadera',ext];
-  if(abd>THR)                      return ['abduccion_cadera',abd];
-  return [null,0];
-}
-function analyzeKnee(hip,kn,an){
-  const ul=[hip.x-kn.x,hip.y-kn.y],ll=[an.x-kn.x,an.y-kn.y];
-  const ang=vecAngle(ul,ll);
-  const flex=Math.max(0,Math.min(140,180-ang));
-  if(flex>10) return ['flexion_rodilla',flex];
-  return ['extension_rodilla',ang>160?0:180-ang];
-}
-// Tobillo: usa talón [29/30] como ref. distal (más estable y visible que dedo índice)
-// Vector pierna: rodilla→tobillo | Vector pie: talón→tobillo (apunta hacia atrás)
-// Neutro anatómico ≈ 90° entre pierna y suelo → referencia: talón al mismo nivel que tobillo
-// Dorsiflexión: tobillo sube hacia la pierna (ángulo pierna–pie < 90°)
-// Flexión plantar: talón sube, punta baja (ángulo pierna–pie > 90°)
-// Umbral de visibilidad alto (0.72) para evitar coordenadas inestables del talón ocluido.
-// Filtro de coherencia: si el ángulo calculado difiere >18° del último valor estable,
-// se descarta el frame (return [null,0]) en lugar de suavizarlo con basura.
-// Esto elimina los picos de 24°,37° que aparecen cuando el talón queda oculto.
-const _ankleLastAng={derecho:90,izquierdo:90};
-function analyzeAnkle(kn, an, he, side){
-  // 1. Visibilidad estricta en los tres puntos
-  if (!he || (he.visibility||0) < 0.55) return [null, 0];
-  if ((kn.visibility||0) < 0.60)        return [null, 0];
-  if ((an.visibility||0) < 0.60)        return [null, 0];
-
-  const pierna = [kn.x - an.x, kn.y - an.y];
-  const talon  = [he.x - an.x, he.y - an.y];
-
-  const lenPierna = Math.hypot(pierna[0], pierna[1]);
-  const lenTalon  = Math.hypot(talon[0],  talon[1]);
-
-  if (lenPierna < 0.02 || lenTalon < 0.02) return [null, 0];
-
-  const ang = vecAngle(pierna, talon);
-
-  // 2. Filtro de coherencia temporal: descarta saltos > 18° respecto al frame anterior
-  const last = _ankleLastAng[side] ?? 90;
-  if (Math.abs(ang - last) > 18) { _ankleLastAng[side] = last; return [null, 0]; }
-  _ankleLastAng[side] = ang;
-
-  const dorsi  = Math.max(0, Math.min(20, 90 - ang));
-  const plantar= Math.max(0, Math.min(45, ang - 90));
-
-  if (dorsi >= 10)   return ['dorsiflexion_tobillo',    dorsi];
-  if (plantar >= 10) return ['flexion_plantar_tobillo', plantar];
+  if(Math.abs(el.x-sh.x) > Math.abs(el.y-sh.y)*0.45 && abd > THR) return ['abduccion_hombro', abd];
   return [null, 0];
 }
 
-// estado
-function localISO(d=new Date()){
-  return d.toLocaleString('sv-SE').replace('T',' ');
+function analyzeElbow(sh, el, wr){
+  const flex = Math.max(0, Math.min(145, 180 - angle2d(sh, el, wr)));
+  if(flex > THR) return ['flexion_codo', flex];
+  if(flex < 8)   return ['extension_codo', 0];
+  return [null, 0];
 }
-const SIDES=['derecho','izquierdo'];
-const JOINTS=['hombro','codo','cadera','rodilla','tobillo'];
-const J_SUP=['hombro','codo'],J_INF=['cadera','rodilla','tobillo'];
-const COLS={hombro:'var(--blue)',codo:'var(--cyan)',cadera:'var(--orange)',rodilla:'var(--green)',tobillo:'var(--purple)'};
+
+function analyzeHip(sh, hip, kn, side){
+  const trunk = [sh.x-hip.x, sh.y-hip.y];
+  const leg   = [kn.x-hip.x, kn.y-hip.y];
+  const va    = vecAngle(trunk, leg);
+  const flex  = kn.y < hip.y-0.05 ? Math.min(va, 125) : 0;
+  const ext   = (kn.y > hip.y && Math.abs(kn.x-hip.x) > Math.abs(kn.y-hip.y)*0.2) ? Math.min(180-va, 20) : 0;
+  let abd = 0;
+  if(Math.abs(kn.x-hip.x) > Math.abs(kn.y-hip.y)*0.5){
+    if(side === 'derecho'   && kn.x < hip.x) abd = Math.min(va, 45);
+    if(side === 'izquierdo' && kn.x > hip.x) abd = Math.min(va, 45);
+  }
+  if(flex > THR && flex > abd && flex > ext) return ['flexion_cadera',   flex];
+  if(ext  > THR && ext  > abd)               return ['extension_cadera', ext];
+  if(abd  > THR)                             return ['abduccion_cadera',  abd];
+  return [null, 0];
+}
+
+function analyzeKnee(hip, kn, an){
+  const ul = [hip.x-kn.x, hip.y-kn.y], ll = [an.x-kn.x, an.y-kn.y];
+  const ang  = vecAngle(ul, ll);
+  const flex = Math.max(0, Math.min(140, 180 - ang));
+  if(flex > 10) return ['flexion_rodilla', flex];
+  return ['extension_rodilla', ang > 160 ? 0 : 180 - ang];
+}
+
+// ─── TOBILLO MEJORADO ────────────────────────────────────────────────────────
+// Landmarks:
+//   kn  = rodilla  (25/26)
+//   an  = tobillo  (27/28)   ← vértice del ángulo
+//   he  = talón    (29/30)   ← validador sagital (¿hay movimiento real?)
+//   ft  = dedo índice (31/32) ← define la dirección real del pie
+//
+// Lógica de validación con talón:
+//   • talon_sube  (an.y - he.y > UMBRAL) → el talón se eleva → flexión plantar real
+//   • tobillo_sube (kn.y - an.y > UMBRAL) → tobillo se acerca rodilla → dorsiflexión real
+//   • Si ninguno supera el umbral → el pie se movió lateral/rotó → descartar
+//
+// Cálculo: ángulo entre vector pierna (kn→an) y vector pie (an→ft)
+//   < 90° → dorsiflexión   (máx clínico ~20°)
+//   > 90° → flexión plantar (máx clínico ~45°)
+// ─────────────────────────────────────────────────────────────────────────────
+const _ankleLastAng = { derecho: 90, izquierdo: 90 };
+
+function analyzeAnkle(kn, an, he, ft, side){
+  // 1. Visibilidad estricta en los cuatro puntos
+  if(!he || (he.visibility || 0) < 0.55) return [null, 0];
+  if(!ft || (ft.visibility || 0) < 0.50) return [null, 0];
+  if((kn.visibility || 0) < 0.55)        return [null, 0];
+  if((an.visibility || 0) < 0.55)        return [null, 0];
+
+  // 2. Validación sagital con talón
+  //    talon_sube  > 0 → talón se eleva respecto al tobillo (flex. plantar)
+  //    tobillo_sube > 0 → tobillo sube respecto a la rodilla (dorsiflexión)
+  const UMBRAL_SAGITAL = 0.03;
+  const talon_sube   = an.y - he.y;   // positivo si talón sube
+  const tobillo_sube = kn.y - an.y;   // positivo si tobillo sube
+
+  const hay_movimiento_sagital =
+    talon_sube   > UMBRAL_SAGITAL ||
+    tobillo_sube > UMBRAL_SAGITAL;
+
+  if(!hay_movimiento_sagital) return [null, 0];
+
+  // 3. Cálculo del ángulo: vector pierna (kn→an) vs vector pie (an→ft)
+  const pierna = [kn.x - an.x, kn.y - an.y];
+  const pie    = [ft.x - an.x, ft.y - an.y];
+
+  const lenPierna = Math.hypot(pierna[0], pierna[1]);
+  const lenPie    = Math.hypot(pie[0],    pie[1]);
+
+  if(lenPierna < 0.02 || lenPie < 0.02) return [null, 0];
+
+  const ang = vecAngle(pierna, pie);
+
+  // 4. Filtro de coherencia temporal: descarta saltos > 15°
+  const last = _ankleLastAng[side] ?? 90;
+  if(Math.abs(ang - last) > 15){
+    _ankleLastAng[side] = last;
+    return [null, 0];
+  }
+  _ankleLastAng[side] = ang;
+
+  // 5. Clasificación clínica
+  const dorsi   = Math.max(0, Math.min(20, 90 - ang));
+  const plantar = Math.max(0, Math.min(45, ang - 90));
+
+  if(dorsi   >= 8) return ['dorsiflexion_tobillo',    dorsi];
+  if(plantar >= 8) return ['flexion_plantar_tobillo', plantar];
+  return [null, 0];
+}
+
+// ─── ESTADO ──────────────────────────────────────────────────────────────────
+function localISO(d = new Date()){
+  return d.toLocaleString('sv-SE').replace('T', ' ');
+}
+const SIDES  = ['derecho', 'izquierdo'];
+const JOINTS = ['hombro', 'codo', 'cadera', 'rodilla', 'tobillo'];
+const J_SUP  = ['hombro', 'codo'], J_INF = ['cadera', 'rodilla', 'tobillo'];
+const COLS   = { hombro:'var(--blue)', codo:'var(--cyan)', cadera:'var(--orange)', rodilla:'var(--green)', tobillo:'var(--purple)' };
+
 function mkState(){
-  const s={};
-  for(const side of SIDES){s[side]={};
-    for(const j of JOINTS) s[side][j]={buf:[],angle:0,max:0,min:180,exercise:'reposo'};
+  const s = {};
+  for(const side of SIDES){ s[side] = {};
+    for(const j of JOINTS) s[side][j] = { buf:[], angle:0, max:0, min:180, exercise:'reposo' };
   }
   return s;
 }
 function mkMovs(){
-  const m={};
-  for(const side of SIDES) for(const j of JOINTS) m[`${j}_${side}`]={};
+  const m = {};
+  for(const side of SIDES) for(const j of JOINTS) m[`${j}_${side}`] = {};
   return m;
 }
-let jData=mkState(),registro=[],movs=mkMovs(),ticks=0,sesStart=null;
-function updateJoint(side,joint,ex,angle){
-  const d=jData[side][joint];
-  d.exercise=ex;d.angle=smoothAngle(d.buf,angle);
-  if(ex!=='reposo'&&d.angle>0){d.max=Math.max(d.max,d.angle);d.min=Math.min(d.min,d.angle);}
+
+let jData = mkState(), registro = [], movs = mkMovs(), ticks = 0, sesStart = null;
+
+function updateJoint(side, joint, ex, angle){
+  const d = jData[side][joint];
+  d.exercise = ex;
+  d.angle    = smoothAngle(d.buf, angle);
+  if(ex !== 'reposo' && d.angle > 0){
+    d.max = Math.max(d.max, d.angle);
+    d.min = Math.min(d.min, d.angle);
+  }
 }
 function tick(){
-  if(++ticks%30!==0) return;
-  if(!sesStart) sesStart=localISO();
-  const ts=new Date().toTimeString().slice(0,8);
+  if(++ticks % 30 !== 0) return;
+  if(!sesStart) sesStart = localISO();
+  const ts = new Date().toTimeString().slice(0, 8);
   for(const side of SIDES) for(const j of JOINTS){
-    const d=jData[side][j];
-    if(d.exercise!=='reposo'&&d.angle>0){
-      const m=META[d.exercise];
-      registro.push({timestamp:ts,lado:side,region:m.r,articulacion:j,ejercicio:d.exercise,angulo:Math.round(d.angle*100)/100});
-      const k=`${j}_${side}`;
-      movs[k][d.exercise]=Math.max(movs[k][d.exercise]||0,d.max);
+    const d = jData[side][j];
+    if(d.exercise !== 'reposo' && d.angle > 0){
+      const m = META[d.exercise];
+      registro.push({ timestamp:ts, lado:side, region:m.r, articulacion:j, ejercicio:d.exercise, angulo:Math.round(d.angle*100)/100 });
+      const k = `${j}_${side}`;
+      movs[k][d.exercise] = Math.max(movs[k][d.exercise] || 0, d.max);
     }
   }
 }
 
-// APACHE y SQLite API,  URL de tu servicio en Render 
-const API_URL='https://backend-d2fb.onrender.com/api/sesiones.php';
-// ROM_API_KEY generado en Render
-const API_KEY='-xK9mP3qL7nR2wT8v';
-const API_H={'X-API-Key':API_KEY};
+// ─── API ─────────────────────────────────────────────────────────────────────
+const API_URL = 'https://backend-d2fb.onrender.com/api/sesiones.php';
+const API_KEY = '-xK9mP3qL7nR2wT8v';
+const API_H   = { 'X-API-Key': API_KEY };
 
-async function apiGet(path=''){
-  try{const r=await fetch(API_URL+path,{headers:API_H});if(!r.ok)return null;return r.json();}
-  catch(e){console.error('[ROM] GET'+path,e);return null;}
+async function apiGet(path = ''){
+  try{ const r = await fetch(API_URL+path, { headers:API_H }); if(!r.ok) return null; return r.json(); }
+  catch(e){ console.error('[ROM] GET'+path, e); return null; }
 }
 async function apiPost(body){
-  try{const r=await fetch(API_URL,{method:'POST',headers:{...API_H,'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
-  catch(e){console.error('[ROM] POST',e);return false;}
+  try{ const r = await fetch(API_URL, { method:'POST', headers:{...API_H,'Content-Type':'text/plain'}, body:JSON.stringify(body) }); return r.ok; }
+  catch(e){ console.error('[ROM] POST', e); return false; }
 }
-async function apiPatch(id,body){
-  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'PATCH',headers:{...API_H,'Content-Type':'text/plain'},body:JSON.stringify(body)});return r.ok;}
-  catch(e){console.error('[ROM] PATCH',e);return false;}
+async function apiPatch(id, body){
+  try{ const r = await fetch(`${API_URL}?id=${id}`, { method:'PATCH', headers:{...API_H,'Content-Type':'text/plain'}, body:JSON.stringify(body) }); return r.ok; }
+  catch(e){ console.error('[ROM] PATCH', e); return false; }
 }
 async function apiDel(id){
-  try{const r=await fetch(`${API_URL}?id=${id}`,{method:'DELETE',headers:API_H});return r.ok;}
-  catch(e){console.error('[ROM] DELETE',e);return false;}
+  try{ const r = await fetch(`${API_URL}?id=${id}`, { method:'DELETE', headers:API_H }); return r.ok; }
+  catch(e){ console.error('[ROM] DELETE', e); return false; }
 }
 
-// Apache HTTP Server, PHP, SQLite
-async function loadAll(){const d=await apiGet();return Array.isArray(d)?d:[];}
-async function nextId(){const d=await apiGet('?maxid=1');return d?String((d.maxId||0)+1):'1';}
+async function loadAll(){ const d = await apiGet(); return Array.isArray(d) ? d : []; }
+async function nextId(){ const d = await apiGet('?maxid=1'); return d ? String((d.maxId||0)+1) : '1'; }
+
 async function saveSession(){
-  const sid=await nextId(),now=localISO();
-  const maxMin={};
+  const sid = await nextId(), now = localISO();
+  const maxMin = {};
   for(const side of SIDES) for(const j of JOINTS){
-    const d=jData[side][j];
-    maxMin[`${j}_${side}`]={max:Math.round(d.max*100)/100,min:d.min<180?Math.round(d.min*100)/100:0};
+    const d = jData[side][j];
+    maxMin[`${j}_${side}`] = { max:Math.round(d.max*100)/100, min:d.min<180?Math.round(d.min*100)/100:0 };
   }
-  const ses={id:sid,inicio:sesStart||now,fin:now,paciente:'',notas:'',tipo:'gonio_fullbody',
-    max_min:maxMin,movimientos_detectados:JSON.parse(JSON.stringify(movs)),registro:[...registro]};
-  const ok=await apiPost(ses);
-  if(!ok){toast('⚠ Error al guardar');return;}
-  registro=[];movs=mkMovs();sesStart=null;
-  const fl=document.getElementById('flash');
-  fl.classList.add('show');setTimeout(()=>fl.classList.remove('show'),300);
-  toast(`✓ Sesión #${sid} guardada`,true);renderSesList();
+  const ses = { id:sid, inicio:sesStart||now, fin:now, paciente:'', notas:'', tipo:'gonio_fullbody',
+    max_min:maxMin, movimientos_detectados:JSON.parse(JSON.stringify(movs)), registro:[...registro] };
+  const ok = await apiPost(ses);
+  if(!ok){ toast('⚠ Error al guardar'); return; }
+  registro = []; movs = mkMovs(); sesStart = null;
+  const fl = document.getElementById('flash');
+  fl.classList.add('show'); setTimeout(() => fl.classList.remove('show'), 300);
+  toast(`✓ Sesión #${sid} guardada`, true);
+  renderSesList();
 }
-function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;_ankleLastAng.derecho=90;_ankleLastAng.izquierdo=90;toast('🔄 Reset completo');}
-async function updateSes(id,p,n){await apiPatch(id,{paciente:p,notas:n});}
-async function deleteSes(id){await apiDel(id);renderSesList();toast('Sesión eliminada');}
+
+function resetSession(){
+  jData = mkState(); registro = []; movs = mkMovs(); sesStart = null; ticks = 0;
+  _ankleLastAng.derecho = 90; _ankleLastAng.izquierdo = 90;
+  toast('🔄 Reset completo');
+}
+
+async function updateSes(id, p, n){ await apiPatch(id, { paciente:p, notas:n }); }
+async function deleteSes(id){ await apiDel(id); renderSesList(); toast('Sesión eliminada'); }
 async function exportSes(id){
-  const all=await loadAll();
-  const s=all.find(x=>x.id===id);if(!s)return;
-  const name=s.paciente?`sesion_${s.id}_${s.paciente.replace(/\s+/g,'_')}.json`:`sesion_${s.id}.json`;
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,4)],{type:'application/json'}));
-  a.download=name;a.click();
+  const all = await loadAll();
+  const s = all.find(x => x.id === id); if(!s) return;
+  const name = s.paciente ? `sesion_${s.id}_${s.paciente.replace(/\s+/g,'_')}.json` : `sesion_${s.id}.json`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(s, null, 4)], { type:'application/json' }));
+  a.download = name; a.click();
 }
 function importJSON(inp){
-  const f=inp.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=async e=>{
+  const f = inp.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = async e => {
     try{
-      const d=JSON.parse(e.target.result);if(!d.id)throw 0;
-      const all=await loadAll();
-      if(all.find(s=>s.id===d.id)){toast('⚠ Sesión ya existe');return;}
-      const ok=await apiPost(d);
-      if(ok){renderSesList();toast('✓ Sesión importada',true);}else{toast('⚠ Error al importar');}
-    }catch{toast('⚠ Archivo inválido');}
+      const d = JSON.parse(e.target.result); if(!d.id) throw 0;
+      const all = await loadAll();
+      if(all.find(s => s.id === d.id)){ toast('⚠ Sesión ya existe'); return; }
+      const ok = await apiPost(d);
+      if(ok){ renderSesList(); toast('✓ Sesión importada', true); } else { toast('⚠ Error al importar'); }
+    }catch{ toast('⚠ Archivo inválido'); }
   };
-  r.readAsText(f);inp.value='';
+  r.readAsText(f); inp.value = '';
 }
 
-// MEDIAPIPE 
-const vid=document.getElementById('vid');
-const cvs=document.getElementById('cvs');
-const ctx=cvs.getContext('2d');
-let pose,cameraOn=false,poseReady=false,facingMode='user';
+// ─── MEDIAPIPE ───────────────────────────────────────────────────────────────
+const vid = document.getElementById('vid');
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+let pose, cameraOn = false, poseReady = false, facingMode = 'user';
 
 function onResults(res){
-  ctx.clearRect(0,0,cvs.width,cvs.height);
-  const lm=res.poseLandmarks;
-  if(lm&&lm.length>0){
-    setStatus('on','Detectando');
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  const lm = res.poseLandmarks;
+  if(lm && lm.length > 0){
+    setStatus('on', 'Detectando');
     ctx.save();
-    if(facingMode==='user'){ctx.translate(cvs.width,0);ctx.scale(-1,1);}
-    if(window.drawConnectors&&window.POSE_CONNECTIONS){
-      drawConnectors(ctx,lm,POSE_CONNECTIONS,{color:'rgba(30,60,200,0.85)',lineWidth:3});
-      drawLandmarks(ctx,lm,{color:'#00e5cc',fillColor:'#00e5cc',lineWidth:1,radius:5});
+    if(facingMode === 'user'){ ctx.translate(cvs.width, 0); ctx.scale(-1, 1); }
+    if(window.drawConnectors && window.POSE_CONNECTIONS){
+      drawConnectors(ctx, lm, POSE_CONNECTIONS, { color:'rgba(30,60,200,0.85)', lineWidth:3 });
+      drawLandmarks(ctx,  lm, { color:'#00e5cc', fillColor:'#00e5cc', lineWidth:1, radius:5 });
     }
     ctx.restore();
-    const L={sh:11,el:13,wr:15,hip:23,kn:25,an:27,he:29};
-    const R={sh:12,el:14,wr:16,hip:24,kn:26,an:28,he:30};
-    const map={
-      derecho:  {sh:lm[R.sh],el:lm[R.el],wr:lm[R.wr],hip:lm[R.hip],kn:lm[R.kn],an:lm[R.an],he:lm[R.he]},
-      izquierdo:{sh:lm[L.sh],el:lm[L.el],wr:lm[L.wr],hip:lm[L.hip],kn:lm[L.kn],an:lm[L.an],he:lm[L.he]},
+
+    // ── Mapa de landmarks ──────────────────────────────────────────────────
+    // Derecho  (desde perspectiva MediaPipe): 12,14,16,24,26,28,30,32
+    // Izquierdo:                              11,13,15,23,25,27,29,31
+    // he = talón (29/30) → validador sagital de tobillo
+    // ft = dedo índice del pie (31/32) → vector del pie para ángulo tobillo
+    const map = {
+      derecho:   { sh:lm[12], el:lm[14], wr:lm[16], hip:lm[24], kn:lm[26], an:lm[28], he:lm[30], ft:lm[32] },
+      izquierdo: { sh:lm[11], el:lm[13], wr:lm[15], hip:lm[23], kn:lm[25], an:lm[27], he:lm[29], ft:lm[31] },
     };
+
     for(const side of SIDES){
-      const {sh,el,wr,hip,kn,an,he}=map[side];
-      const vs=Math.min(sh.visibility||0,el.visibility||0,wr.visibility||0);
-      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0,he.visibility||0);
-      if(vs>=VIS){
-        const[exS,aS]=analyzeShoulder(sh,el,hip);updateJoint(side,'hombro',exS||'reposo',aS);
-        const[exE,aE]=analyzeElbow(sh,el,wr);    updateJoint(side,'codo',  exE||'reposo',aE);
-      }else{updateJoint(side,'hombro','reposo',0);updateJoint(side,'codo','reposo',0);}
-      if(vi>=VIS){
-        const[exH,aH]=analyzeHip(sh,hip,kn,side);updateJoint(side,'cadera', exH||'reposo',aH);
-        const[exK,aK]=analyzeKnee(hip,kn,an);    updateJoint(side,'rodilla',exK||'reposo',aK);
-        const[exA,aA]=analyzeAnkle(kn,an,he,side);updateJoint(side,'tobillo',exA||'reposo',aA);
-      }else{updateJoint(side,'cadera','reposo',0);updateJoint(side,'rodilla','reposo',0);updateJoint(side,'tobillo','reposo',0);}
+      const { sh, el, wr, hip, kn, an, he, ft } = map[side];
+      const vs = Math.min(sh.visibility||0, el.visibility||0, wr.visibility||0);
+      const vi = Math.min(hip.visibility||0, kn.visibility||0, an.visibility||0);
+
+      if(vs >= VIS){
+        const [exS, aS] = analyzeShoulder(sh, el, hip); updateJoint(side, 'hombro', exS||'reposo', aS);
+        const [exE, aE] = analyzeElbow(sh, el, wr);      updateJoint(side, 'codo',   exE||'reposo', aE);
+      } else {
+        updateJoint(side, 'hombro', 'reposo', 0);
+        updateJoint(side, 'codo',   'reposo', 0);
+      }
+
+      if(vi >= VIS){
+        const [exH, aH] = analyzeHip(sh, hip, kn, side);       updateJoint(side, 'cadera',  exH||'reposo', aH);
+        const [exK, aK] = analyzeKnee(hip, kn, an);             updateJoint(side, 'rodilla', exK||'reposo', aK);
+        // Tobillo: ahora recibe ft (dedo índice) además de he (talón)
+        const [exA, aA] = analyzeAnkle(kn, an, he, ft, side);   updateJoint(side, 'tobillo', exA||'reposo', aA);
+      } else {
+        updateJoint(side, 'cadera',  'reposo', 0);
+        updateJoint(side, 'rodilla', 'reposo', 0);
+        updateJoint(side, 'tobillo', 'reposo', 0);
+      }
     }
-    tick();renderAP();
-  }else{
-    setStatus('warn','Sin detectar');
-    ctx.fillStyle='rgba(255,68,102,0.9)';
-    ctx.font='bold 14px JetBrains Mono,monospace';
-    ctx.textAlign='center';
-    ctx.fillText('⚠ NO SE DETECTA PERSONA',cvs.width/2,34);
+    tick();
+    renderAP();
+  } else {
+    setStatus('warn', 'Sin detectar');
+    ctx.fillStyle    = 'rgba(255,68,102,0.9)';
+    ctx.font         = 'bold 14px JetBrains Mono,monospace';
+    ctx.textAlign    = 'center';
+    ctx.fillText('⚠ NO SE DETECTA PERSONA', cvs.width/2, 34);
   }
 }
+
 async function initPose(){
   ldMsg('Cargando modelo de pose…');
-  pose=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${f}`});
-  pose.setOptions({modelComplexity:1,smoothLandmarks:true,enableSegmentation:false,
-    smoothSegmentation:false,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+  pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${f}` });
+  pose.setOptions({ modelComplexity:1, smoothLandmarks:true, enableSegmentation:false,
+    smoothSegmentation:false, minDetectionConfidence:0.5, minTrackingConfidence:0.5 });
   pose.onResults(onResults);
   ldMsg('Inicializando modelo WASM…');
   await pose.initialize();
   ldMsg('Activando cámara…');
   await startCam();
 }
+
 async function startCam(mode){
-  if(mode) facingMode=mode;
-  let stream=null;
-  for(const c of [{video:{facingMode:facingMode,width:{ideal:640},height:{ideal:480}}},{video:true}]){
-    try{stream=await navigator.mediaDevices.getUserMedia(c);break;}catch(e){}
+  if(mode) facingMode = mode;
+  let stream = null;
+  for(const c of [{ video:{ facingMode, width:{ ideal:640 }, height:{ ideal:480 } } }, { video:true }]){
+    try{ stream = await navigator.mediaDevices.getUserMedia(c); break; } catch(e){}
   }
   if(!stream) throw new Error('No se pudo acceder a la cámara');
-  vid.srcObject=stream;
-  await new Promise(res=>{vid.onloadedmetadata=res;});
+  vid.srcObject = stream;
+  await new Promise(res => { vid.onloadedmetadata = res; });
   await vid.play();
-  // Espejo cámara frontal
-  vid.style.transform=facingMode==='user'?'scaleX(-1)':'scaleX(1)';
-  cameraOn=true;poseReady=true;
-  document.getElementById('ld').style.opacity='0';
-  setTimeout(()=>document.getElementById('ld').style.display='none',400);
-  setStatus('warn','Buscando…');
+  vid.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+  cameraOn = true; poseReady = true;
+  document.getElementById('ld').style.opacity = '0';
+  setTimeout(() => document.getElementById('ld').style.display = 'none', 400);
+  setStatus('warn', 'Buscando…');
   loop();
 }
+
 async function switchCam(){
-  const btn=document.getElementById('fab-flip');
-  if(btn) btn.style.pointerEvents='none';
-  cameraOn=false;
-  if(vid.srcObject) vid.srcObject.getTracks().forEach(t=>t.stop());
-  const newMode=facingMode==='user'?'environment':'user';
-  setStatus('warn','Cambiando cámara…');
+  const btn = document.getElementById('fab-flip');
+  if(btn) btn.style.pointerEvents = 'none';
+  cameraOn = false;
+  if(vid.srcObject) vid.srcObject.getTracks().forEach(t => t.stop());
+  const newMode = facingMode === 'user' ? 'environment' : 'user';
+  setStatus('warn', 'Cambiando cámara…');
   try{
     await startCam(newMode);
-    toast(newMode==='environment'?'📷 Cámara trasera':'🤳 Cámara frontal',true);
-  }catch(e){
-    // volver a la cámara anterior si falla
-    cameraOn=true;
+    toast(newMode === 'environment' ? '📷 Cámara trasera' : '🤳 Cámara frontal', true);
+  } catch(e){
+    cameraOn = true;
     toast('⚠ No se pudo cambiar de cámara');
-    await startCam(facingMode==='user'?'environment':'user');
+    await startCam(facingMode === 'user' ? 'environment' : 'user');
   }
-  if(btn) btn.style.pointerEvents='';
+  if(btn) btn.style.pointerEvents = '';
 }
+
 async function loop(){
   if(!cameraOn) return;
-  if(vid.readyState>=2){
-    const w=vid.videoWidth||640,h=vid.videoHeight||480;
-    if(cvs.width!==w||cvs.height!==h){cvs.width=w;cvs.height=h;}
-    try{await pose.send({image:vid});}catch(e){}
+  if(vid.readyState >= 2){
+    const w = vid.videoWidth||640, h = vid.videoHeight||480;
+    if(cvs.width !== w || cvs.height !== h){ cvs.width = w; cvs.height = h; }
+    try{ await pose.send({ image:vid }); } catch(e){}
   }
   requestAnimationFrame(loop);
 }
 
-//UI:PANEL DE ÁNGULOS
+// ─── UI: PANEL DE ÁNGULOS ────────────────────────────────────────────────────
 function renderAP(){
-  document.getElementById('ap-sup').innerHTML=J_SUP.flatMap(j=>SIDES.map(s=>apCard(j,s))).join('');
-  document.getElementById('ap-inf').innerHTML=J_INF.flatMap(j=>SIDES.map(s=>apCard(j,s))).join('');
+  document.getElementById('ap-sup').innerHTML = J_SUP.flatMap(j => SIDES.map(s => apCard(j,s))).join('');
+  document.getElementById('ap-inf').innerHTML = J_INF.flatMap(j => SIDES.map(s => apCard(j,s))).join('');
 }
-function apCard(j,side){
-  const d=jData[side][j],col=COLS[j],active=d.exercise!=='reposo';
+function apCard(j, side){
+  const d = jData[side][j], col = COLS[j], active = d.exercise !== 'reposo';
   return `<div class="apc">
     <div class="apc-lbl">${j.toUpperCase()}·${side==='derecho'?'D':'I'}</div>
     <div class="apc-val" style="color:${active?col:'var(--txt3)'}">${active?Math.round(d.angle):0}<span>°</span></div>
@@ -793,19 +836,19 @@ function apCard(j,side){
   </div>`;
 }
 
-//UI:SESIONES 
-let qFilter='';
-function filterSes(v){qFilter=v;renderSesList();}
+// ─── UI: SESIONES ─────────────────────────────────────────────────────────────
+let qFilter = '';
+function filterSes(v){ qFilter = v; renderSesList(); }
 async function renderSesList(){
-  const all=await loadAll(),q=qFilter.toLowerCase();
-  const list=q?all.filter(s=>(s.paciente||'').toLowerCase().includes(q)||s.id.includes(q)):all;
-  document.getElementById('ses-count').textContent=`${list.length} sesión${list.length!==1?'es':''}`;
-  const el=document.getElementById('ses-list');
+  const all = await loadAll(), q = qFilter.toLowerCase();
+  const list = q ? all.filter(s => (s.paciente||'').toLowerCase().includes(q) || s.id.includes(q)) : all;
+  document.getElementById('ses-count').textContent = `${list.length} sesión${list.length!==1?'es':''}`;
+  const el = document.getElementById('ses-list');
   if(!list.length){
-    el.innerHTML=`<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-txt">${q?`Sin resultados para "${q}"`:'No hay sesiones guardadas.'}</div></div>`;
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-txt">${q?`Sin resultados para "${q}"`:'No hay sesiones guardadas.'}</div></div>`;
     return;
   }
-  el.innerHTML=list.map(s=>`
+  el.innerHTML = list.map(s => `
     <div class="si" onclick="openDet('${s.id}')">
       <div class="si-top"><span class="si-id">Sesión #${s.id}</span><span class="si-arr">›</span></div>
       <div class="si-name ${!s.paciente?'empty':''}">${s.paciente||'Sin paciente asignado'}</div>
@@ -813,14 +856,14 @@ async function renderSesList(){
     </div>`).join('');
 }
 
-//UI: DETALLE
-let detId=null,formOpen=false;
-async function openDet(id){detId=id;formOpen=false;document.getElementById('det-title').textContent=`Sesión #${id}`;await renderDet();goScreen('det');}
+// ─── UI: DETALLE ──────────────────────────────────────────────────────────────
+let detId = null, formOpen = false;
+async function openDet(id){ detId = id; formOpen = false; document.getElementById('det-title').textContent = `Sesión #${id}`; await renderDet(); goScreen('det'); }
 async function renderDet(){
-  const s=(await loadAll()).find(x=>x.id===detId);if(!s)return;
-  function jCard(j,side){
-    const k=`${j}_${side}`,d=s.max_min?.[k]||{max:0,min:0},col=COLS[j];
-    const entries=Object.entries(s.movimientos_detectados?.[k]||{});
+  const s = (await loadAll()).find(x => x.id === detId); if(!s) return;
+  function jCard(j, side){
+    const k = `${j}_${side}`, d = s.max_min?.[k]||{max:0,min:0}, col = COLS[j];
+    const entries = Object.entries(s.movimientos_detectados?.[k]||{});
     return `<div class="jcard">
       <div class="jcard-ttl"><span class="dot2" style="background:${col}"></span>${j.toUpperCase()} · ${side==='derecho'?'DER.':'IZQ.'}</div>
       <div class="jbody">
@@ -830,8 +873,8 @@ async function renderDet(){
       ${entries.length?`<div class="divider"></div>${entries.map(([ex,a])=>`<div class="mv-row"><div class="mv-name">${ex.replace(/_/g,' ')}</div><div class="mv-ang" style="color:${col}">${parseFloat(a).toFixed(0)}°</div></div>`).join('')}`:''}
     </div>`;
   }
-  const regs=s.registro||[];
-  document.getElementById('det-body').innerHTML=`
+  const regs = s.registro || [];
+  document.getElementById('det-body').innerHTML = `
     <div class="shd-card">
       <div class="snum"><span class="snum-l">SES</span><span class="snum-v">#${s.id}</span></div>
       <div class="sinfo">
@@ -876,60 +919,60 @@ async function renderDet(){
           </table></div>`
         :`<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-txt">Sin registros</div></div>`}
     </div>`;
-  document.getElementById('det-acts').innerHTML=`
+  document.getElementById('det-acts').innerHTML = `
     <button class="btn btn-g" onclick="toggleForm()" style="flex:1">✏️ Asignar</button>
     <button class="btn btn-p" onclick="exportSes('${s.id}')" style="flex:1">⬇️ Exportar</button>
     <button class="btn btn-d" onclick="confirmDel('${s.id}')">🗑️</button>`;
 }
 function detTab(n){
-  ['sup','inf','reg'].forEach(x=>{
-    document.getElementById('tc-'+x).classList.toggle('on',x===n);
-    document.getElementById('tb-'+x).classList.toggle('on',x===n);
+  ['sup','inf','reg'].forEach(x => {
+    document.getElementById('tc-'+x).classList.toggle('on', x===n);
+    document.getElementById('tb-'+x).classList.toggle('on', x===n);
   });
 }
-function toggleForm(){formOpen=!formOpen;renderDet();}
+function toggleForm(){ formOpen = !formOpen; renderDet(); }
 async function guardar(id){
-  await updateSes(id,document.getElementById('fn').value.trim(),document.getElementById('fno').value.trim());
-  formOpen=false;await renderDet();renderSesList();toast('✓ Paciente asignado',true);
+  await updateSes(id, document.getElementById('fn').value.trim(), document.getElementById('fno').value.trim());
+  formOpen = false; await renderDet(); renderSesList(); toast('✓ Paciente asignado', true);
 }
-async function confirmDel(id){if(confirm(`¿Borrar sesión #${id}?`)){await deleteSes(id);goBack();}}
+async function confirmDel(id){ if(confirm(`¿Borrar sesión #${id}?`)){ await deleteSes(id); goBack(); } }
 
-//NAVEGACIÓN 
-let curScreen='cam';
+// ─── NAVEGACIÓN ───────────────────────────────────────────────────────────────
+let curScreen = 'cam';
 function goScreen(name){
-  ['cam','ses','det'].forEach(s=>document.getElementById('sc-'+s).classList.toggle('off',s!==name));
-  document.getElementById('nb-cam').classList.toggle('on',name==='cam');
-  document.getElementById('nb-ses').classList.toggle('on',name==='ses'||name==='det');
-  document.getElementById('botnav').classList.toggle('off',name==='det');
-  if(name==='ses') renderSesList();
-  curScreen=name;
+  ['cam','ses','det'].forEach(s => document.getElementById('sc-'+s).classList.toggle('off', s!==name));
+  document.getElementById('nb-cam').classList.toggle('on', name==='cam');
+  document.getElementById('nb-ses').classList.toggle('on', name==='ses'||name==='det');
+  document.getElementById('botnav').classList.toggle('off', name==='det');
+  if(name === 'ses') renderSesList();
+  curScreen = name;
 }
-function goBack(){goScreen(curScreen==='det'?'ses':'cam');}
+function goBack(){ goScreen(curScreen==='det'?'ses':'cam'); }
 
-// NOTIFICACIONES
+// ─── NOTIFICACIONES ───────────────────────────────────────────────────────────
 let tTimer;
-function toast(msg,green=false){
-  const el=document.getElementById('toast');
-  el.textContent=msg;el.className='show'+(green?' g':'');
-  clearTimeout(tTimer);tTimer=setTimeout(()=>el.className='',2500);
+function toast(msg, green=false){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show' + (green ? ' g' : '');
+  clearTimeout(tTimer); tTimer = setTimeout(() => el.className = '', 2500);
 }
-function ldMsg(m){document.getElementById('ld-msg').textContent=m;}
-function setStatus(state,txt){
-  document.getElementById('sDot').className='dot'+(state==='on'?' on':state==='warn'?' warn':'');
-  document.getElementById('sTxt').textContent=txt;
+function ldMsg(m){ document.getElementById('ld-msg').textContent = m; }
+function setStatus(state, txt){
+  document.getElementById('sDot').className = 'dot' + (state==='on'?' on':state==='warn'?' warn':'');
+  document.getElementById('sTxt').textContent = txt;
 }
-document.addEventListener('keydown',e=>{
-  if(e.key==='s'||e.key==='S') saveSession();
-  if(e.key==='r'||e.key==='R') resetSession();
+document.addEventListener('keydown', e => {
+  if(e.key === 's' || e.key === 'S') saveSession();
+  if(e.key === 'r' || e.key === 'R') resetSession();
 });
 
-//INICIO
-document.getElementById('ld').style.transition='opacity .4s';
-if(location.protocol!=='https:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1'){
-  document.getElementById('ld').style.display='none';
-  document.getElementById('https-err').style.display='flex';
-}else{
-  window.addEventListener('load',()=>setTimeout(initPose,300));
+// ─── INICIO ───────────────────────────────────────────────────────────────────
+document.getElementById('ld').style.transition = 'opacity .4s';
+if(location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
+  document.getElementById('ld').style.display    = 'none';
+  document.getElementById('https-err').style.display = 'flex';
+} else {
+  window.addEventListener('load', () => setTimeout(initPose, 300));
 }
 </script>
 </body>
