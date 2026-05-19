@@ -537,7 +537,7 @@ function analyzeKnee(hip,kn,an){
 const _ankleLastAng={derecho:0,izquierdo:0};
 function analyzeAnkle(kn, an, side){
   if((kn.visibility||0) < 0.60) return [null, 0];
-  if((an.visibility||0) < 0.60) return [null, 0];
+  if((an.visibility||0) < 0.70) return [null, 0];
 
   // Vector pierna: tobillo → rodilla (apunta hacia arriba)
   const px = kn.x - an.x;
