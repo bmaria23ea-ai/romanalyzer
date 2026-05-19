@@ -478,7 +478,7 @@ function analyzeShoulder(sh,el,hip){
   const abd=angle2d(ref,sh,el);
   if(ang>THR&&el.y<sh.y-0.01) return ['flexion_hombro',ang];
   if(el.y>sh.y+0.02){
-    const ext=Math.max(0,Math.min(60,ang*0.6));
+    const ext=Math.max(0,Math.min(45,ang));
     if(ext>THR) return ['extension_hombro',ext];
   }
   if(Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.45&&abd>THR) return ['abduccion_hombro',abd];
@@ -486,7 +486,7 @@ function analyzeShoulder(sh,el,hip){
 }
 // Codo 2D: flex = 180 - angulo hombro->codo->muneca en plano XY
 function analyzeElbow(sh,el,wr){
-  const flex=Math.max(0,Math.min(150,180-angle2d(sh,el,wr)));
+  const flex=Math.max(0,Math.min(145,180-angle2d(sh,el,wr)));
   if(flex>THR) return ['flexion_codo',flex];
   if(flex<8)   return ['extension_codo',0];
   return [null,0];
@@ -505,7 +505,7 @@ function analyzeHip(sh,hip,kn,side){
   const flex=kn.y<hip.y-0.05?Math.min(va,125):0;
 
   // Extensión: rodilla por debajo y algo lateral → complemento del ángulo tronco-pierna
-  const ext=(kn.y>hip.y&&Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.2)?Math.min(180-va,30):0;
+  const ext=(kn.y>hip.y&&Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.2)?Math.min(180-va,20):0;
 
   // Abducción: desplazamiento lateral del knee respecto a la cadera (máx clínico 45°)
   let abd=0;
@@ -522,7 +522,7 @@ function analyzeHip(sh,hip,kn,side){
 function analyzeKnee(hip,kn,an){
   const ul=[hip.x-kn.x,hip.y-kn.y],ll=[an.x-kn.x,an.y-kn.y];
   const ang=vecAngle(ul,ll);
-  const flex=Math.max(0,Math.min(150,180-ang));
+  const flex=Math.max(0,Math.min(140,180-ang));
   if(flex>10) return ['flexion_rodilla',flex];
   return ['extension_rodilla',ang>160?0:180-ang];
 }
@@ -557,8 +557,8 @@ function analyzeAnkle(kn, an, he, side){
   if (Math.abs(ang - last) > 18) { _ankleLastAng[side] = last; return [null, 0]; }
   _ankleLastAng[side] = ang;
 
-  const dorsi  = Math.max(0, Math.min(30, 90 - ang));
-  const plantar= Math.max(0, Math.min(60, ang - 90));
+  const dorsi  = Math.max(0, Math.min(20, 90 - ang));
+  const plantar= Math.max(0, Math.min(45, ang - 90));
 
   if (dorsi >= 10)   return ['dorsiflexion_tobillo',    dorsi];
   if (plantar >= 10) return ['flexion_plantar_tobillo', plantar];
