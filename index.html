@@ -558,45 +558,46 @@ function analyzeElbow(sh, el, wr) {
 /**
  * CADERA
  *
- * Flexión  : referencia vertical sobre cadera → ángulo real de elevación del muslo.
- * Extensión: 180° − ángulo(tronco, pierna).
- *            De pie: trunk↑ y leg↓ → vecAngle ≈ 180° → ext ≈ 0° ✓
- *            Al extender: va disminuye → ext aumenta ✓
- *            FIX respecto al código anterior: se usaba Math.min(angulo, 30) donde
- *            angulo ≈ 170° de pie → siempre daba 30°. Ahora es 180−va ≈ 0° de pie.
- * Abducción: muslo se aleja lateralmente superando ratio 0.5 respecto a la caída vertical.
+ * Flexión  : calcAngle(sh, hip, kn) — ángulo en la cadera entre tronco y muslo.
+ *   De pie: ~175°  → flex = 5°  → bajo umbral → no dispara ✓
+ *   Sentadilla frontal: tronco se inclina, va disminuyendo → flex supera THR ✓
+ *   Elevación de rodilla: baja aún más → valores mayores ✓
+ *   FIX respecto a versión anterior: se usaba kn.y < hip.y - 0.04 (rodilla sobre cadera)
+ *   que NUNCA se cumple en sentadilla (kn.y > hip.y siempre de pie/sentadilla).
+ *
+ * Extensión: REMOVIDA — desde vista frontal genera asimetría izq/der constante
+ *   porque la variación mínima del eje trunk-pierna entre ambos lados dispara
+ *   extensión en un lado sí y en el otro no.
+ *
+ * Abducción: separación lateral del muslo con dirección correcta.
  */
 function analyzeHip(sh, hip, kn, side) {
   if (!sh || !hip || !kn ||
-      (hip.visibility||0) < VIS || (kn.visibility||0) < VIS) return [null, 0];
+      (sh.visibility||0)  < 0.3  ||
+      (hip.visibility||0) < VIS  ||
+      (kn.visibility||0)  < VIS) return [null, 0];
 
-  // --- Flexión: ángulo desde la vertical sobre la cadera ---
-  const ref  = { x: hip.x, y: hip.y - 0.2 }; // punto fijo arriba de la cadera
-  const flex = kn.y < hip.y - 0.04
-    ? Math.min(calcAngle(ref, hip, kn), 125)
-    : 0;
+  const ang  = calcAngle(sh, hip, kn); // ángulo hombro-cadera-rodilla
+  const flex = 180 - ang;              // ≈ 0° de pie, sube al flexionar
 
-  // --- Extensión: compensada para ser ≈ 0° de pie ---
-  const trunk = [sh.x - hip.x, sh.y - hip.y]; // apunta ↑ (hacia el hombro)
-  const leg   = [kn.x - hip.x, kn.y - hip.y]; // apunta ↓ (hacia la rodilla)
-  const va    = vecAngle2(trunk, leg);          // ≈ 180° de pie
-  // Solo detecta extensión cuando la pierna está mayormente vertical (no abducida)
-  const ext = (kn.y > hip.y &&
-               Math.abs(kn.x - hip.x) < Math.abs(kn.y - hip.y) * 0.5)
-    ? Math.max(0, Math.min(180 - va, 35))
-    : 0;
+  // Abducción: muslo se separa lateralmente en la dirección correcta
+  const lateralDist    = Math.abs(kn.x - hip.x);
+  const vertDist       = Math.abs(kn.y - hip.y) + 0.01;
+  const isLateralDom   = lateralDist / vertDist > 0.45;
+  // Cámara frontal espejo: 'derecho' ocupa el lado de x menor, 'izquierdo' x mayor
+  const isCorrectDir   =
+    (side === 'derecho'   && kn.x < hip.x - 0.05) ||
+    (side === 'izquierdo' && kn.x > hip.x + 0.05);
 
-  // --- Abducción: separación lateral supera 50% de la caída vertical ---
-  let abd = 0;
-  const lateralRatio = Math.abs(kn.x - hip.x) / (Math.abs(kn.y - hip.y) + 0.01);
-  if (lateralRatio > 0.5) {
-    if (side === 'derecho'   && kn.x < hip.x - 0.04) abd = Math.min(va, 50);
-    if (side === 'izquierdo' && kn.x > hip.x + 0.04) abd = Math.min(va, 50);
+  if (isLateralDom && isCorrectDir && flex > THR) {
+    return ['abduccion_cadera', Math.min(flex * 0.6, 50)];
   }
 
-  if (flex > THR && flex > abd && flex > ext) return ['flexion_cadera',    flex];
-  if (ext  > THR && ext > abd)               return ['extension_cadera',   ext];
-  if (abd  > THR)                            return ['abduccion_cadera',   abd];
+  // Flexión: umbral 5° adicional para evitar falsas lecturas por pequeñas inclinaciones
+  if (flex > THR + 5 && flex < 130) {
+    return ['flexion_cadera', Math.min(flex, 125)];
+  }
+
   return [null, 0];
 }
 
@@ -617,35 +618,52 @@ function analyzeKnee(hip, kn, an) {
 
 /**
  * TOBILLO
- * FIX respecto al original: se usaba fi.y < an.y para detectar dorsiflexión,
- * pero en posición normal de pie fi.y < an.y es TRUE → activación falsa constante.
+ * Usa vectores pierna (kn→an) y pie (an→fi) para medir la angulación real.
+ * Posición neutra ≈ 90°. Dorsi > 95°, Plantar < 75°.
  *
- * Nuevo enfoque: ángulo entre vector pierna (kn→an) y vector pie (an→fi).
- * Posición neutra ≈ 90°.
- * Dorsiflexión (punta arriba): ang > 95°  → dorsi = ang − 90
- * Flexión plantar (punta abajo): ang < 75° → plantar = 90 − ang
- * Umbrales internos (>12°) evitan disparos por variaciones mínimas de postura.
+ * BUG TOBILLO 60° ESTÁTICO: MediaPipe a veces ubica fi (pie) más ARRIBA que el
+ * tobillo (fi.y < an.y) o cerca de la rodilla. Cuando fi aparece en la zona de la
+ * pierna, el vector pie apunta hacia arriba igual que el vector pierna → ángulo ≈ 0°
+ * → plantar = 90-0 = 90° (o cualquier valor alto que se clampea a 45 en live pero
+ * se acumula en el MAX mostrando 60°+).
+ *
+ * Restricciones geométricas para rechazar landmarks inválidos:
+ * 1. fi debe estar al mismo nivel o debajo del tobillo (fi.y >= an.y - 0.06)
+ * 2. fi debe ser más lejano de la rodilla que del tobillo (landmark en zona de pie, no pierna)
+ * 3. El vector pie debe tener longitud mínima razonable (≥ 0.04)
  */
 function analyzeAnkle(kn, an, fi) {
   if (!kn || !an || !fi ||
-      (kn.visibility||0) < VIS || (an.visibility||0) < VIS || (fi.visibility||0) < 0.40) return [null, 0];
+      (kn.visibility||0) < VIS  ||
+      (an.visibility||0) < VIS  ||
+      (fi.visibility||0) < 0.45) return [null, 0];
+
+  // Restricción 1: fi no puede estar significativamente más alto que el tobillo
+  // (en MediaPipe y aumenta hacia abajo; fi.y < an.y-0.06 = pie detectado demasiado arriba)
+  if (fi.y < an.y - 0.06) return [null, 0];
+
+  // Restricción 2: fi debe estar más cerca del tobillo que de la rodilla
+  const distFiAn = Math.hypot(fi.x - an.x, fi.y - an.y);
+  const distFiKn = Math.hypot(fi.x - kn.x, fi.y - kn.y);
+  if (distFiKn < distFiAn * 1.2) return [null, 0]; // fi está en zona de pierna, no pie
 
   const pierna = [kn.x - an.x, kn.y - an.y];
   const pie    = [fi.x - an.x, fi.y - an.y];
 
   const lP = Math.hypot(pierna[0], pierna[1]);
   const lF = Math.hypot(pie[0],    pie[1]);
-  if (lP < 0.02 || lF < 0.02) return [null, 0];
+  // Restricción 3: longitud mínima del vector pie (evita landmarks casi coincidentes)
+  if (lP < 0.02 || lF < 0.04) return [null, 0];
 
   const ang = vecAngle2(pierna, pie);
 
-  // Dorsiflexión: punta del pie sube
+  // Dorsiflexión: punta del pie sube (punta arriba > posición neutra)
   if (ang > 95 && ang < 135) {
     const d = ang - 90;
     if (d > 12) return ['dorsiflexion_tobillo', Math.min(d, 30)];
   }
 
-  // Flexión plantar: punta del pie baja
+  // Flexión plantar: punta del pie baja (punta abajo < posición neutra)
   if (ang < 75 && ang > 35) {
     const p = 90 - ang;
     if (p > 12) return ['flexion_plantar_tobillo', Math.min(p, 45)];
@@ -683,10 +701,22 @@ let jData = mkState(), registro = [], movs = mkMovs(), ticks = 0, sesStart = nul
 
 function updateJoint(side, joint, ex, angle) {
   const d = jData[side][joint];
-  angle = stableAngle(side, joint, angle);       // bloquea saltos bruscos
+
+  // Al volver a reposo: limpieza inmediata del buffer y el estabilizador.
+  // Sin esto el stabilizer bloqueaba la bajada (lastAngle=40 → |0-40|>MAX_JUMP → devolvía 40)
+  // y el buffer promediaba valores viejos → hombro mostraba 15-16° con brazo quieto.
+  if (ex === 'reposo') {
+    d.buf      = [];
+    d.exercise = 'reposo';
+    d.angle    = 0;
+    lastAngles[side][joint] = 0;
+    return;
+  }
+
+  angle = stableAngle(side, joint, angle);
   d.exercise = ex;
-  d.angle = smoothAngle(d.buf, angle);            // suaviza con buffer
-  if (ex !== 'reposo' && d.angle > 0) {
+  d.angle = smoothAngle(d.buf, angle);
+  if (d.angle > 0) {
     d.max = Math.max(d.max, d.angle);
     d.min = Math.min(d.min, d.angle);
   }
