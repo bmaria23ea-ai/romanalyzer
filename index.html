@@ -505,7 +505,7 @@ function analyzeHip(sh,hip,kn,side){
   const flex=kn.y<hip.y-0.05?Math.min(va,125):0;
 
   // Extensión: rodilla por debajo y algo lateral → complemento del ángulo tronco-pierna
-  const ext=(kn.y>hip.y&&Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.2)?Math.min(180-va,30):0;
+  const ext=(kn.y>hip.y&&Math.abs(kn.x-hip.x)>Math.abs(kn.y-hip.y)*0.2)?Math.min(180-va,20):0;
 
   // Abducción: desplazamiento lateral del knee respecto a la cadera (máx clínico 45°)
   let abd=0;
@@ -527,44 +527,41 @@ function analyzeKnee(hip,kn,an){
   return ['extension_rodilla',ang>160?0:180-ang];
 }
 // Tobillo: usa talón [29/30] como ref. distal (más estable y visible que dedo índice)
-// Tobillo: ángulo de la pierna respecto a la vertical
-// No depende de ningún punto del pie — solo usa rodilla y tobillo (landmarks más estables)
-// Referencia: vector vertical [0,-1] (hacia arriba en coords de imagen)
-// Posición neutra (pie plano, pierna vertical) → ángulo pierna-vertical ≈ 0°
-// Dorsiflexión: tobillo avanza, pierna se inclina hacia adelante → ángulo positivo frontal
-// Flexión plantar: talón sube, pierna se inclina hacia atrás → ángulo positivo posterior
-// Se usa la componente X del vector pierna para distinguir hacia dónde se inclina
-const _ankleLastAng={derecho:0,izquierdo:0};
-function analyzeAnkle(kn, an, side){
-  if((kn.visibility||0) < 0.60) return [null, 0];
-  if((an.visibility||0) < 0.75) return [null, 0];
+// Vector pierna: rodilla→tobillo | Vector pie: talón→tobillo (apunta hacia atrás)
+// Neutro anatómico ≈ 90° entre pierna y suelo → referencia: talón al mismo nivel que tobillo
+// Dorsiflexión: tobillo sube hacia la pierna (ángulo pierna–pie < 90°)
+// Flexión plantar: talón sube, punta baja (ángulo pierna–pie > 90°)
+// Umbral de visibilidad alto (0.72) para evitar coordenadas inestables del talón ocluido.
+// Filtro de coherencia: si el ángulo calculado difiere >18° del último valor estable,
+// se descarta el frame (return [null,0]) en lugar de suavizarlo con basura.
+// Esto elimina los picos de 24°,37° que aparecen cuando el talón queda oculto.
+const _ankleLastAng={derecho:90,izquierdo:90};
+function analyzeAnkle(kn, an, he, side){
+  // 1. Visibilidad estricta en los tres puntos
+  if (!he || (he.visibility||0) < 0.55) return [null, 0];
+  if ((kn.visibility||0) < 0.60)        return [null, 0];
+  if ((an.visibility||0) < 0.60)        return [null, 0];
 
-  // Vector pierna: tobillo → rodilla (apunta hacia arriba)
-  const px = kn.x - an.x;
-  const py = kn.y - an.y;  // en coords imagen Y crece hacia abajo, rodilla tiene Y menor → py negativo
+  const pierna = [kn.x - an.x, kn.y - an.y];
+  const talon  = [he.x - an.x, he.y - an.y];
 
-  if(Math.hypot(px, py) < 0.02) return [null, 0];
+  const lenPierna = Math.hypot(pierna[0], pierna[1]);
+  const lenTalon  = Math.hypot(talon[0],  talon[1]);
 
-  // Ángulo entre la pierna y la vertical pura [0,-1]
-  const vertical = [0, -1];
-  const ang = vecAngle([px, py], vertical); // 0° = pierna recta, >0° = inclinada
+  if (lenPierna < 0.02 || lenTalon < 0.02) return [null, 0];
 
-  // Filtro de coherencia: descarta saltos > 15° entre frames
-  const last = _ankleLastAng[side] ?? 0;
-  if(Math.abs(ang - last) > 15){ _ankleLastAng[side] = last; return [null, 0]; }
+  const ang = vecAngle(pierna, talon);
+
+  // 2. Filtro de coherencia temporal: descarta saltos > 18° respecto al frame anterior
+  const last = _ankleLastAng[side] ?? 90;
+  if (Math.abs(ang - last) > 18) { _ankleLastAng[side] = last; return [null, 0]; }
   _ankleLastAng[side] = ang;
 
-  // px > 0 significa que el tobillo está adelantado respecto a la rodilla → dorsiflexión
-  // px < 0 significa que el tobillo está detrás de la rodilla → flexión plantar
-  // (espejo: en cámara frontal/usuario los ejes se invierten, compensamos con Math.abs y px)
-  const dorsi  = Math.max(0, Math.min(20, ang));
-  const plantar = Math.max(0, Math.min(45, ang));
+  const dorsi  = Math.max(0, Math.min(20, 90 - ang));
+  const plantar= Math.max(0, Math.min(45, ang - 90));
 
-  // Usamos la dirección horizontal de la inclinación para clasificar
-  if(Math.abs(px) < 0.03) return [null, 0]; // pierna demasiado vertical para clasificar
-
-  if(px > 0 && dorsi >= 8)   return ['dorsiflexion_tobillo',    dorsi];
-  if(px < 0 && plantar >= 8) return ['flexion_plantar_tobillo', plantar];
+  if (dorsi >= 10)   return ['dorsiflexion_tobillo',    dorsi];
+  if (plantar >= 10) return ['flexion_plantar_tobillo', plantar];
   return [null, 0];
 }
 
@@ -651,7 +648,7 @@ async function saveSession(){
   fl.classList.add('show');setTimeout(()=>fl.classList.remove('show'),300);
   toast(`✓ Sesión #${sid} guardada`,true);renderSesList();
 }
-function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;_ankleLastAng.derecho=0;_ankleLastAng.izquierdo=0;toast('🔄 Reset completo');}
+function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;_ankleLastAng.derecho=90;_ankleLastAng.izquierdo=90;toast('🔄 Reset completo');}
 async function updateSes(id,p,n){await apiPatch(id,{paciente:p,notas:n});}
 async function deleteSes(id){await apiDel(id);renderSesList();toast('Sesión eliminada');}
 async function exportSes(id){
@@ -704,7 +701,7 @@ function onResults(res){
     for(const side of SIDES){
       const {sh,el,wr,hip,kn,an,he}=map[side];
       const vs=Math.min(sh.visibility||0,el.visibility||0,wr.visibility||0);
-      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0);
+      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0,he.visibility||0);
       if(vs>=VIS){
         const[exS,aS]=analyzeShoulder(sh,el,hip);updateJoint(side,'hombro',exS||'reposo',aS);
         const[exE,aE]=analyzeElbow(sh,el,wr);    updateJoint(side,'codo',  exE||'reposo',aE);
@@ -712,7 +709,7 @@ function onResults(res){
       if(vi>=VIS){
         const[exH,aH]=analyzeHip(sh,hip,kn,side);updateJoint(side,'cadera', exH||'reposo',aH);
         const[exK,aK]=analyzeKnee(hip,kn,an);    updateJoint(side,'rodilla',exK||'reposo',aK);
-        const[exA,aA]=analyzeAnkle(kn,an,side);  updateJoint(side,'tobillo',exA||'reposo',aA);
+        const[exA,aA]=analyzeAnkle(kn,an,he,side);updateJoint(side,'tobillo',exA||'reposo',aA);
       }else{updateJoint(side,'cadera','reposo',0);updateJoint(side,'rodilla','reposo',0);updateJoint(side,'tobillo','reposo',0);}
     }
     tick();renderAP();
