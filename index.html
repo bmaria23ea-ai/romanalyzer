@@ -532,7 +532,7 @@ function analyzeKnee(hip,kn,an){
 // Dorsiflexión: tobillo sube hacia la pierna (ángulo pierna–pie < 90°)
 // Flexión plantar: talón sube, punta baja (ángulo pierna–pie > 90°)
 function analyzeAnkle(kn, an, he){
-  if (!he || (he.visibility || 0) < 0.55) return [null, 0];
+  if (!he || (he.visibility || 0) >= 0.65) return [null, 0];
 
   const pierna = [kn.x - an.x, kn.y - an.y];
   const talon  = [he.x - an.x, he.y - an.y];
