@@ -538,7 +538,7 @@ function analyzeKnee(hip,kn,an){
 const _ankleLastAng={derecho:90,izquierdo:90};
 function analyzeAnkle(kn, an, he, side){
   // 1. Visibilidad estricta en los tres puntos
-  if (!he || (he.visibility||0) < 0.72) return [null, 0];
+  if (!he || (he.visibility||0) < 0.65) return [null, 0];
   if ((kn.visibility||0) < 0.60)        return [null, 0];
   if ((an.visibility||0) < 0.60)        return [null, 0];
 
