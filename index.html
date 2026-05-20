@@ -710,8 +710,7 @@ function onResults(res){
     for(const side of SIDES){
       const {sh,el,wr,hip,kn,an,fi,he}=map[side];
       const vs=Math.min(sh.visibility||0,el.visibility||0,wr.visibility||0);
-      const vi=Math.min(  hip.visibility||0,kn.visibility||0,an.visibility||0,fi.visibility||0);
-//      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0);
+      const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0);
       if(vs>=VIS){
         const[exS,aS]=analyzeShoulder(sh,el,hip);updateJoint(side,'hombro',exS||'reposo',aS);
         const[exE,aE]=analyzeElbow(sh,el,wr);    updateJoint(side,'codo',  exE||'reposo',aE);
