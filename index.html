@@ -478,27 +478,21 @@ function detectPlane(sh,el){
   return 'mixto';
 }
 function analyzeShoulder(sh,el,hip){
-  const ang=angle3d(hip,sh,el,true);
-  const ref={x:sh.x,y:sh.y+0.3,z:sh.z};
-  const abd=angle3d(ref,sh,el,false);
-  const behind=(el.z-sh.z)>0.06;
-  const plane=detectPlane(sh,el);
-  if(plane==='sagital'||plane==='mixto'){
-    if(ang>THR&&el.y<sh.y-0.01) return ['flexion_hombro',ang];
-    if(behind&&(el.y-sh.y)>0.02){
-      const ext=Math.max(0,Math.min(60,ang*0.6));
-      if(ext>THR) return ['extension_hombro',ext];
-    }
+  const ang=angle2d(hip,sh,el);
+  const ref={x:sh.x,y:sh.y+0.3};
+  const abd=angle2d(ref,sh,el);
+  if(ang>THR&&el.y<sh.y-0.01) return ['flexion_hombro',ang];
+  if(el.y>sh.y+0.02){
+    const ext=Math.max(0,Math.min(45,ang));
+    if(ext>THR) return ['extension_hombro',ext];
   }
-  if(plane==='frontal'||plane==='mixto'){
-    if(Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.45&&abd>THR) return ['abduccion_hombro',abd];
-  }
+  if(Math.abs(el.x-sh.x)>Math.abs(el.y-sh.y)*0.45&&abd>THR) return ['abduccion_hombro',abd];
   return [null,0];
 }
 function analyzeElbow(sh,el,wr){
-  const flex=Math.max(0,Math.min(150,180-angle3d(sh,el,wr,true)));
-  if(flex>THR) return ['flexion_codo',flex];
-  if(flex<8)   return ['extension_codo',0];
+  const flex=Math.max(0,Math.min(145,180-angle2d(sh,el,wr)));
+  if(flex>20) return ['flexion_codo',flex];
+  if(flex<=20) return ['extension_codo',0];
   return [null,0];
 }
 function analyzeHip(sh,hip,kn,side){
