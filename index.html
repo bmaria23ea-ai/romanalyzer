@@ -534,7 +534,7 @@ function analyzeKnee(hip,kn,an){
 // Flexión plantar: dedo baja (fi.y > an.y) — talón confirma que NO baja también (ruido)
 // vi no incluye fi para no bloquear cadera/rodilla cuando el dedo no se ve
 const _ankleLastAng={derecho:0,izquierdo:0};
-function analyzeAnkle(kn, an, fi, he, side){
+function analyzeAnkle(kn, an, fi, side){
   if(!fi || (fi.visibility||0) < 0.50) return [null, 0];
   if((an.visibility||0) < 0.55)        return [null, 0];
   if((kn.visibility||0) < 0.55)        return [null, 0];
@@ -552,18 +552,15 @@ function analyzeAnkle(kn, an, fi, he, side){
   if(Math.abs(ang - last) > 12){ _ankleLastAng[side] = last; return [null, 0]; }
   _ankleLastAng[side] = ang;
 
-  const heOk  = he && (he.visibility||0) >= 0.45;
   const margen = 0.02;
 
   // Dorsiflexión: dedo sube respecto al tobillo
   if(fi.y < an.y - margen){
-    if(heOk && he.y < an.y - margen) return [null, 0]; // talón también sube → ruido
     const dorsi = Math.max(0, Math.min(20, ang));
     if(dorsi >= 10) return ['dorsiflexion_tobillo', dorsi];
   }
   // Flexión plantar: dedo baja respecto al tobillo
   if(fi.y > an.y + margen){
-    if(heOk && he.y > an.y + margen) return [null, 0]; // talón también baja → ruido
     const plantar = Math.max(0, Math.min(45, 180 - ang));
     if(plantar >= 10) return ['flexion_plantar_tobillo', plantar];
   }
@@ -697,14 +694,14 @@ function onResults(res){
       drawLandmarks(ctx,lm,{color:'#00e5cc',fillColor:'#00e5cc',lineWidth:1,radius:5});
     }
     ctx.restore();
-    const L={sh:11,el:13,wr:15,hip:23,kn:25,an:27,fi:31,he:29};
-    const R={sh:12,el:14,wr:16,hip:24,kn:26,an:28,fi:32,he:30};
+    const L={sh:11,el:13,wr:15,hip:23,kn:25,an:27,fi:31};
+    const R={sh:12,el:14,wr:16,hip:24,kn:26,an:28,fi:32};
     const map={
-      derecho:  {sh:lm[R.sh],el:lm[R.el],wr:lm[R.wr],hip:lm[R.hip],kn:lm[R.kn],an:lm[R.an],fi:lm[R.fi],he:lm[R.he]},
-      izquierdo:{sh:lm[L.sh],el:lm[L.el],wr:lm[L.wr],hip:lm[L.hip],kn:lm[L.kn],an:lm[L.an],fi:lm[L.fi],he:lm[L.he]},
+      derecho:  {sh:lm[R.sh],el:lm[R.el],wr:lm[R.wr],hip:lm[R.hip],kn:lm[R.kn],an:lm[R.an],fi:lm[R.fi]},
+      izquierdo:{sh:lm[L.sh],el:lm[L.el],wr:lm[L.wr],hip:lm[L.hip],kn:lm[L.kn],an:lm[L.an],fi:lm[L.fi]},
     };
     for(const side of SIDES){
-      const {sh,el,wr,hip,kn,an,fi,he}=map[side];
+      const {sh,el,wr,hip,kn,an,fi}=map[side];
       const vs=Math.min(sh.visibility||0,el.visibility||0,wr.visibility||0);
       const vi=Math.min(hip.visibility||0,kn.visibility||0,an.visibility||0);
       if(vs>=VIS){
@@ -714,7 +711,7 @@ function onResults(res){
       if(vi>=VIS){
         const[exH,aH]=analyzeHip(sh,hip,kn,side);updateJoint(side,'cadera', exH||'reposo',aH);
         const[exK,aK]=analyzeKnee(hip,kn,an);    updateJoint(side,'rodilla',exK||'reposo',aK);
-        const[exA,aA]=analyzeAnkle(kn,an,fi,he,side);updateJoint(side,'tobillo',exA||'reposo',aA);
+        const[exA,aA]=analyzeAnkle(kn,an,fi,side);  updateJoint(side,'tobillo',exA||'reposo',aA);
       }else{updateJoint(side,'cadera','reposo',0);updateJoint(side,'rodilla','reposo',0);updateJoint(side,'tobillo','reposo',0);}
     }
     tick();renderAP();
