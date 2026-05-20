@@ -533,7 +533,7 @@ function analyzeKnee(hip,kn,an){
 // Dorsiflexión:    dedo sube (fi.y < an.y) — talón confirma que NO sube también (ruido)
 // Flexión plantar: dedo baja (fi.y > an.y) — talón confirma que NO baja también (ruido)
 // vi no incluye fi para no bloquear cadera/rodilla cuando el dedo no se ve
-const _ankleLastAng={derecho:0,izquierdo:0};
+const _ankleLastAng={derecho:-1,izquierdo:-1};
 function analyzeAnkle(kn, an, fi, side){
   if(!fi || (fi.visibility||0) < 0.50) return [null, 0];
   if((an.visibility||0) < 0.55)        return [null, 0];
@@ -547,22 +547,22 @@ function analyzeAnkle(kn, an, fi, side){
 
   const ang = vecAngle(pierna, pie);
 
-  // Filtro coherencia temporal: descarta saltos > 12° entre frames
-  const last = _ankleLastAng[side] ?? 0;
-  if(Math.abs(ang - last) > 12){ _ankleLastAng[side] = last; return [null, 0]; }
+  // Filtro coherencia: -1 significa sin valor previo → acepta cualquier ángulo inicial
+  const last = _ankleLastAng[side];
+  if(last >= 0 && Math.abs(ang - last) > 12){ _ankleLastAng[side] = last; return [null, 0]; }
   _ankleLastAng[side] = ang;
 
-  const margen = 0.02;
+  const margen = 0.015;
 
   // Dorsiflexión: dedo sube respecto al tobillo
   if(fi.y < an.y - margen){
     const dorsi = Math.max(0, Math.min(20, ang));
-    if(dorsi >= 10) return ['dorsiflexion_tobillo', dorsi];
+    if(dorsi >= 8) return ['dorsiflexion_tobillo', dorsi];
   }
   // Flexión plantar: dedo baja respecto al tobillo
   if(fi.y > an.y + margen){
     const plantar = Math.max(0, Math.min(45, 180 - ang));
-    if(plantar >= 10) return ['flexion_plantar_tobillo', plantar];
+    if(plantar >= 8) return ['flexion_plantar_tobillo', plantar];
   }
   return [null, 0];
 }
@@ -650,7 +650,7 @@ async function saveSession(){
   fl.classList.add('show');setTimeout(()=>fl.classList.remove('show'),300);
   toast(`✓ Sesión #${sid} guardada`,true);renderSesList();
 }
-function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;_ankleLastAng.derecho=0;_ankleLastAng.izquierdo=0;toast('🔄 Reset completo');}
+function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;_ankleLastAng.derecho=-1;_ankleLastAng.izquierdo=-1;toast('🔄 Reset completo');}
 async function updateSes(id,p,n){await apiPatch(id,{paciente:p,notas:n});}
 async function deleteSes(id){await apiDel(id);renderSesList();toast('Sesión eliminada');}
 async function exportSes(id){
