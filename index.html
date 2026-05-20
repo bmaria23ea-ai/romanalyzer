@@ -529,12 +529,10 @@ function analyzeKnee(hip,kn,an){
 //  if(fi.y<an.y){const d=Math.min(ang,30);return d>=25?['dorsiflexion_tobillo',d]:[null,0];}
 //  const p=Math.min(180-ang,60);return p>=25?['flexion_plantar_tobillo',p]:[null,0];
 //}
-// Tobillo: 4 puntos — rodilla[25/26], tobillo[27/28], dedo[31/32], talón[29/30]
-// El dedo marca la dirección, el talón confirma (validación cruzada)
-// Dorsiflexión:    dedo sube (fi.y < an.y) Y talón no sube → movimiento real
-// Flexión plantar: dedo baja (fi.y > an.y) Y talón no baja → movimiento real
-// Si ambos se mueven igual → ruido → reposo
-// Filtro coherencia: descarta saltos > 12° entre frames
+// Tobillo: dedo índice [31/32] como referencia principal + talón [29/30] como validación cruzada
+// Dorsiflexión:    dedo sube (fi.y < an.y) — talón confirma que NO sube también (ruido)
+// Flexión plantar: dedo baja (fi.y > an.y) — talón confirma que NO baja también (ruido)
+// vi no incluye fi para no bloquear cadera/rodilla cuando el dedo no se ve
 const _ankleLastAng={derecho:0,izquierdo:0};
 function analyzeAnkle(kn, an, fi, he, side){
   if(!fi || (fi.visibility||0) < 0.50) return [null, 0];
@@ -549,7 +547,7 @@ function analyzeAnkle(kn, an, fi, he, side){
 
   const ang = vecAngle(pierna, pie);
 
-  // Filtro coherencia temporal
+  // Filtro coherencia temporal: descarta saltos > 12° entre frames
   const last = _ankleLastAng[side] ?? 0;
   if(Math.abs(ang - last) > 12){ _ankleLastAng[side] = last; return [null, 0]; }
   _ankleLastAng[side] = ang;
@@ -563,14 +561,12 @@ function analyzeAnkle(kn, an, fi, he, side){
     const dorsi = Math.max(0, Math.min(20, ang));
     if(dorsi >= 10) return ['dorsiflexion_tobillo', dorsi];
   }
-
   // Flexión plantar: dedo baja respecto al tobillo
   if(fi.y > an.y + margen){
     if(heOk && he.y > an.y + margen) return [null, 0]; // talón también baja → ruido
     const plantar = Math.max(0, Math.min(45, 180 - ang));
     if(plantar >= 10) return ['flexion_plantar_tobillo', plantar];
   }
-
   return [null, 0];
 }
 
@@ -657,7 +653,7 @@ async function saveSession(){
   fl.classList.add('show');setTimeout(()=>fl.classList.remove('show'),300);
   toast(`✓ Sesión #${sid} guardada`,true);renderSesList();
 }
-function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;toast('🔄 Reset completo');}
+function resetSession(){jData=mkState();registro=[];movs=mkMovs();sesStart=null;ticks=0;_ankleLastAng.derecho=0;_ankleLastAng.izquierdo=0;toast('🔄 Reset completo');}
 async function updateSes(id,p,n){await apiPatch(id,{paciente:p,notas:n});}
 async function deleteSes(id){await apiDel(id);renderSesList();toast('Sesión eliminada');}
 async function exportSes(id){
